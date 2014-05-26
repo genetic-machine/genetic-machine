@@ -1,0 +1,24 @@
+name := "genetic-machine"
+
+version := "1.0"
+
+scalaVersion := "2.11.1"
+
+resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
+
+libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.1.5" % "test"
+
+libraryDependencies ++= Seq(
+  "com.typesafe.akka" %% "akka-actor" % "2.3.2",
+  "com.typesafe.akka" %% "akka-testkit" % "2.3.2" % "test"
+)
+
+libraryDependencies  ++= Seq(
+  "org.scalanlp" % "breeze_2.10" % "0.7",
+  "org.scalanlp" % "breeze-natives_2.10" % "0.7"
+)
+
+resolvers ++= Seq(
+  "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
+  "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
+)
