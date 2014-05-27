@@ -1,4 +1,4 @@
-package geneticmachine.god
+package god
 
 import akka.actor.{ActorRef, ActorLogging, Actor}
 import scala.concurrent.Future
@@ -31,7 +31,7 @@ class StoryTeller(val textSource: String) extends Actor with ActorLogging {
   def speaking: Receive = {
     case Tell(text) =>
       tell(text)
-      sender ! Done
+      sender ! Ready
   }
 
   def waitingStory(nextSentenceQueue: List[ActorRef]): Receive = {
@@ -53,7 +53,7 @@ class StoryTeller(val textSource: String) extends Actor with ActorLogging {
   def tellingTheStory(text: Array[String], sentenceN: Int): Receive = {
     case NextSentence if sentenceN < text.length =>
       tell(text(sentenceN))
-      sender ! Done
+      sender ! Ready
       context.become {
         tellingTheStory(text, sentenceN + 1) orElse speaking
       }

@@ -1,5 +1,3 @@
-package geneticmachine
-
 import akka.actor.{Props, ActorSystem}
 import god.God
 

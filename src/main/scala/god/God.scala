@@ -1,55 +1,35 @@
-package geneticmachine.god
+package god
 
 import akka.actor.{Props, ActorLogging, Actor}
+import environment.Environment
 
 object God {
-  case object Done
-  case object Fail
+  abstract class Response
+  case object Ready extends Response
+  case object Fail extends Response
+
+  abstract class Requests
+  case object IsReady extends Requests
 }
 
 class God(val manualSource: String = "./src/main/resources/WorldCreation.txt") extends Actor with ActorLogging {
   import StoryTeller._
   import God._
 
-  def oneShot(act: => Unit, recover: => Unit = {}): Receive = {
-    case Done =>
-      act
-      context.unbecome()
-    case Fail =>
-      context.unbecome()
-  }
-
-  context.become(
-    oneShot {
-      println("Create Light: DONE.")
-    }, discardOld = false
-  )
-
-  context.become(
-    oneShot {
-      println("Create env: DONE.")
-    }, discardOld = false
-  )
-
-  context.become(
-    oneShot {
-      println("Introduce myself: DONE.")
-    }, discardOld = false
-  )
-
-  val voice = context.system.actorOf(Props(new StoryTeller(manualSource)), "TheStoryTeller")
+  val voice = context.actorOf(Props(new StoryTeller(manualSource)), "TheStoryTeller")
+  val environment = context.actorOf(Props[Environment], "environment")
 
   voice ! Tell {
     """Hello! I'm the local God!
       |I will guide you through brave new world of evolutionary robotics.
-      |Let's start with the little act of creation!
-    """.stripMargin
+      |Let's start with the little act of creation!""".stripMargin
   }
 
-  voice ! NextSentence
-  voice ! NextSentence
+  (1 to 6).foreach { _ =>
+    voice ! NextSentence
+  }
 
   def receive = {
-    case pray => 
+    case _ =>
   }
 }
