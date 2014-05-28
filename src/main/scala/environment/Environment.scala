@@ -1,34 +1,41 @@
 package environment
 
-import akka.actor.{Props, ActorRef, Actor}
-import scala.collection.mutable
+import akka.actor.{Props, ActorLogging, Actor, ActorRef}
+import common.MessageProtocol
+import scala.concurrent.Future
+import scala.util.{Success, Failure}
 
-object Environment {
-  abstract class Request
-  abstract class Response
+object Environment extends MessageProtocol {
+  case class GenLocation[+LocationParams](params: LocationParams) extends Request
 
-  case object Ready extends Response
-  case object Finish extends Response
+  case class LocationGenDone(locationNode: ActorRef) extends Response
+  case object LocationGenFail extends Response
 }
 
-class Environment(val labyrinthPoolSize: Int = 5, val sizeX: Int, val sizeY: Int) extends Actor {
-  import god.God
+abstract class Environment[+LocationParams, +Location] (val locationNodeProps: Location => Props)
+    extends Actor with ActorLogging {
+
   import Environment._
+  import context.dispatcher
 
-  context.parent ! God.Ready
+  def generateLocation(params: LocationParams): Location
 
-  val labyrinths: mutable.Set[ActorRef] = mutable.Set.empty
-  val workLabyrinths: mutable.Set[ActorRef] = mutable.Set.empty
+  def genLocationRequest: Receive = {
+    case GenLocation(params: LocationParams) =>
+      val requester = sender()
 
-  (0 until labyrinthPoolSize).foreach { _ =>
-    val labActor = context.actorOf(Props(new MapNode(sizeX, sizeY, simpleLabyrinthGen)))
+      Future {
+        generateLocation(params)
+      }.onComplete {
+        case Failure(e) =>
+          log.error(e, "Map generation fail!")
+          requester ! LocationGenFail
+
+        case Success(generatedLocation) =>
+          val mapNode = context.actorOf(locationNodeProps(generatedLocation), "mapNode")
+          requester ! LocationGenDone(mapNode)
+      }
   }
 
-  def receive: Receive = {
-    case Ready =>
-      labyrinths += sender()
-
-    case Finish =>
-      workLabyrinths -= sender()
-  }
+  def receive: Receive = genLocationRequest
 }

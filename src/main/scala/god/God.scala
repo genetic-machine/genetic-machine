@@ -1,7 +1,7 @@
 package god
 
 import akka.actor.{Props, ActorLogging, Actor}
-import environment.Environment
+import environment.World
 
 object God {
   abstract class Response
@@ -17,7 +17,7 @@ class God(val manualSource: String = "./src/main/resources/WorldCreation.txt") e
   import God._
 
   val voice = context.actorOf(Props(new StoryTeller(manualSource)), "TheStoryTeller")
-  val environment = context.actorOf(Props[Environment], "environment")
+  val environment = context.actorOf(Props[World], "environment")
 
   voice ! Tell {
     """Hello! I'm the local God!

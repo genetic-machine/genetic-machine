@@ -1,17 +1,18 @@
+package environment
+
 import breeze.linalg.DenseMatrix
-import breeze.stats.distributions.{Rand, Bernoulli}
 import scala.util.Random
 
-package object environment {
+package object labyrinth {
 
-  type Labyrinth = DenseMatrix[Boolean]
-
-  object Direction extends Enumeration {
-    type Direction = Value
-    val Left, Right, Backward, Forward, Unknown = Value
+  object CellStatus extends Enumeration{
+    type CellStatus = Value
+    val Free, Occupied, Unknown = Value
   }
 
-  import Direction._
+  import CellStatus._
+
+  type Labyrinth = DenseMatrix[CellStatus]
 
   final case class Point(x: Int, y: Int) {
 
@@ -25,27 +26,12 @@ package object environment {
 
     def forward: Point = Point(x, y + 1)
 
-    def to(direction: Direction): Point = direction match {
-      case Left => left
-      case Right => right
-      case Backward => backward
-      case Forward => forward
-    }
-
     def +(other: Point) = Point(this.x + other.x, this.y + other.y)
     def -(other: Point) = Point(this.x - other.x, this.y - other.y)
 
-    def from(p: Point): Direction = (this.x - p.x, this.y - p.y) match {
-      case (-1, 0) => Left
-      case (1, 0) => Right
-      case (0, -1) => Backward
-      case (0, 1) => Forward
-      case _ => Left
-    }
-
     def inBorders(sizeX: Int, sizeY: Int): Boolean = (x >= 0) && (x < sizeX) && (y >= 0) && (y < sizeY)
 
-    def inLabyrinth(lab: Labyrinth): Boolean = inBorders(lab.rows, lab.cols) && !lab(x, y)
+    def inLabyrinth(lab: Labyrinth): Boolean = inBorders(lab.rows, lab.cols) && (lab(x, y) == Free)
 
     def neighborsInLabyrinth(lab: Labyrinth) = neighbors filter { _.inLabyrinth(lab) }
   }
@@ -77,14 +63,14 @@ package object environment {
   }
 
   def simpleLabyrinthGen(sizeX: Int, sizeY: Int): Labyrinth = {
-    val lab = DenseMatrix.fill(sizeX, sizeY)(true)
+    val lab = DenseMatrix.fill(sizeX, sizeY)(Occupied)
 
     val goal = Point(sizeX - 1, (sizeY + 1) / 2)
     val start = Point(0, (sizeY + 1) / 2)
 
     def forward(p: Point, len: Int, dirX: Int, dirY: Int): Point = {
       if (len > 0) {
-        lab(p.x, p.y) = false
+        lab(p.x, p.y) = Free
         val modX = ((p.x + dirX) min (lab.rows - 1)) max 0
         val modY = ((p.y + dirY) min (lab.cols - 1)) max 0
 
@@ -120,6 +106,6 @@ package object environment {
       x <- 0 until lab.rows
     } yield (for {
       y <- 0 until lab.cols
-    } yield if (lab(x, y)) '*' else ' ').mkString(" ")).mkString("\n")
+    } yield if (lab(x, y) == Occupied) '*' else ' ').mkString(" ")).mkString("\n")
   }
 }
