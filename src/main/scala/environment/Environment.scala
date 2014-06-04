@@ -6,13 +6,13 @@ import scala.concurrent.Future
 import scala.util.{Success, Failure}
 
 object Environment extends MessageProtocol {
-  case class GenLocation[+LocationParams](params: LocationParams) extends Request
+  case class GenLocation[LocationParams](params: LocationParams) extends Request
 
   case class LocationGenDone(locationNode: ActorRef) extends Response
   case object LocationGenFail extends Response
 }
 
-abstract class Environment[+LocationParams, +Location] (val locationNodeProps: Location => Props)
+abstract class Environment[LocationParams, Location] (val locationNodeProps: Location => Props)
     extends Actor with ActorLogging {
 
   import Environment._

@@ -6,29 +6,25 @@ import breeze.linalg.DenseMatrix
 
 object LocationNode extends MessageProtocol {
   case object GetLocationParams extends Request
-  case class Observe[+ObservationParams](params: ObservationParams) extends Request
+  case class Observe[ObservationParams](params: ObservationParams) extends Request
 
-  case class LocationParams[+LocationParams](params: LocationParams) extends Response
-  case class ObservationData[+Observation, +ObservationParams](data: Observation,
-                                                               from: ObservationParams) extends Response
+  case class LocationParams[LocationParams](params: LocationParams) extends Response
+  case class ObservationData[Observation, ObservationParams](data: Observation,
+                                                             from: ObservationParams) extends Response
 }
 
-abstract class LocationNode[+Location, +LocationParams,
-                            +Observation, +ObservationParams](val location: Location) extends Actor {
+abstract class LocationNode[LocationT, LocationParamsT,
+                            ObservationT, ObservationParamsT](val location: LocationT) extends Actor {
   import LocationNode._
 
-  def observation(from: ObservationParams): Observation
-  def locationParams: LocationParams
-
-  val props: Location => Props = { location: Location =>
-    Props(this.getClass, location)
-  }
+  def observation(from: ObservationParamsT): ObservationT
+  def locationParams: LocationParamsT
 
   def guideRobot: Receive = {
     case LocationParams =>
       sender() ! LocationParams(locationParams)
 
-    case Observe(from: ObservationParams) =>
+    case Observe(from: ObservationParamsT) =>
       val data = observation(from)
       sender ! ObservationData(data, from)
   }
