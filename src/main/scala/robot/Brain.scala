@@ -3,7 +3,10 @@ package robot
 import akka.actor.{ActorRef, Actor}
 import common.MessageProtocol
 
-object Brain extends MessageProtocol {
+object Brain {
+
+  import MessageProtocol._
+
   case object Reset extends Request
   case class Input[+InputT](data: InputT) extends Request
   case class Sensor(sensor: ActorRef) extends Request
@@ -20,7 +23,7 @@ abstract class Brain[InputT, OutputT] extends Actor {
 
   def waitActuator(sensor: ActorRef): Receive = {
     case Actuator(actuator) =>
-      sender ! Ready
+      sender ! MessageProtocol.Ready
       context.become(doIntelligence(sensor, actuator))
     case Reset =>
       context.become(waitSensor)
@@ -28,7 +31,7 @@ abstract class Brain[InputT, OutputT] extends Actor {
 
   def waitSensor: Receive = {
     case Sensor(sensor) =>
-      sender ! Done
+      sender ! MessageProtocol.Done
       context.become(waitActuator(sensor))
     case Reset =>
 

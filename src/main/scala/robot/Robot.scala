@@ -2,121 +2,118 @@ package robot
 
 import akka.actor.{ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
-import common.MessageProtocol
+import akka.util.Timeout
 import scala.util.{Failure, Success}
+import common.MessageProtocol
+import scala.concurrent.Future
+import scala.reflect.ClassTag
 import java.util.concurrent.TimeUnit
 
-object Robot extends MessageProtocol {
-  case class Location(location: ActorRef) extends Request
+object Robot {
+  import MessageProtocol._
+
   case object Status extends Request
+  case object Statistic extends Request
 
   case class StatusResponse[+StatusT](status: StatusT) extends Response
+  case class StatisticResponse[+StatisticT](statistic: StatisticT) extends Response
   case class Finish(brain: ActorRef) extends Response
+  case class Failure(e: Throwable, brain: ActorRef) extends Response
 }
 
 /**
- * [[robot.Robot]] provides shell for correct [[robot.Brain]] activity.
- * It's like an adapter from 'real' world to abstract brain space.
+ * Provides shell for correct [[robot.Brain]] activity.
+ * It's the adapter from 'real' world to abstract brain space.
  *
  * @param brain brain to guide. It's not a child of robot, because brain is much more valuable than
  *              it's shell and it could be used outside, for example, in multi-robot.
  */
-abstract class Robot[InputT, OutputT, StatusT,
-                     ObservationT, ObservationParamsT,
-                     LocationParamsT] (val brain: ActorRef)
-  extends Actor with ActorLogging {
+abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] (val brain: ActorRef) extends Actor with ActorLogging {
 
-  import environment.LocationNode._
   import context.dispatcher
-  import akka.util.Timeout
 
-  import Brain._
+  def unexpectedResponse(reason: String)(msg: Any) {
+    val e = MessageProtocol.UnexpectedResponse(reason, msg)
+    log.error("Unexpected response!", e)
+    failure(e)
+  }
+
+  def failure(e: Throwable) {
+    brain ! Brain.Reset
+    context.parent ! Robot.Failure(e, brain)
+  }
+
+  /**
+   * Robot's initialisation.
+   * @return initial status and initial brain's input.
+   */
+  val selfSetup: Future[(StatusT, InputT)]
+
+  /**
+   * The "physics" of the location.
+   * Processes current status and brain's output into new status and sensor data.
+   * @param status current status
+   * @param brainOutput brain's response
+   * @return Some(), that includes new robot's status and new brain's input, if goal is not achieved, otherwise None
+   */
+  def processOutput(status: StatusT, brainOutput: OutputT): Option[(StatusT, InputT)]
+
+  /**
+   * Process brain outputs.
+   * @param status
+   */
+  final def guideBrain(status: StatusT): Receive = {
+    case Brain.Output(data: OutputT) =>
+      processOutput(status, data) match {
+        case Some((newStatus: StatusT, inputData: InputT)) =>
+          brain ! Brain.Input(inputData)
+          context.become(training(newStatus), discardOld = true)
+
+        case None =>
+          context.parent ! Robot.Finish(brain)
+          context.unbecome()
+      }
+  }
+
+  /**
+   * Complex behaviour to process all request during the training.
+   * Must include guideBrain behaviour!
+   * @param status current status of robot, i.e. status of location, robot's position.
+   */
+  def training(status: StatusT): Receive
 
   implicit val timeout = Timeout(1, TimeUnit.SECONDS)
 
-  (brain ? Sensor(self)).onComplete {
-    case Success(Done) =>
-      (brain ? Actuator(self)).onComplete {
-        case Success(Ready) =>
-        case msg =>
-          failure(MissType(msg.getClass), "brain actuator setup!")
-      }
-    case msg =>
-      failure(MissType(msg.getClass), "brain sensor setup!")
-  }
+  val brainSensorSetup = for {
+    result <- brain ? Brain.Sensor(self)
+    if result == MessageProtocol.Done
+  } yield result
 
-  def changeStatus(command: OutputT): Option[ObservationParamsT]
-  def applyObservation(data: ObservationT, from: ObservationParamsT): InputT
-  def currentStatus: StatusT
-  def statusReset(params: LocationParamsT): ObservationParamsT
+  brainSensorSetup.onComplete {
+    case Success(_) =>
+      val brainActuatorSetup = brain ? Brain.Actuator(self)
 
-  def observe(from: ObservationParamsT, locationNode: ActorRef) {
-    implicit val timeout = Timeout(1, TimeUnit.SECONDS)
+      val generalSetup = for {
+        status <- selfSetup
+        actuatorSetup <- brainActuatorSetup
+        if actuatorSetup == MessageProtocol.Ready
+      } yield status
 
-    (locationNode ? Observe(from)).onComplete {
-      case Success(ObservationData(data: ObservationT, from: ObservationParamsT)) =>
-        val input = applyObservation(data, from)
-        brain ! Brain.Input(input)
+      generalSetup.onComplete {
+        case Failure(e) =>
+          failure(e)
 
-      case Success(msg) =>
-        failure(MissType(msg.getClass), "Observation type")
-
-      case Failure(e) =>
-        failure(e, "Can't observe location!")
-    }
-  }
-
-  def failure(e: Throwable, message: String) {
-    log.error(e, message)
-    brain ! Brain.Reset
-    context.stop(self)
-  }
-
-  def guideBrain(locationNode: ActorRef): Receive = {
-    case Brain.Output(data: OutputT) =>
-      changeStatus(data) match {
-        case None =>
-          brain ! Brain.Reset
-          context.parent ! Robot.Finish(brain)
-          context.unbecome()
-
-        case Some(from) =>
-          observe(from, locationNode)
+        case Success((status, input)) =>
+          brain ! Brain.Input(input)
+          context.become(training(status))
       }
 
-    case Brain.Output(msg) =>
-      failure(MissType(msg.getClass), "Brain output")
+    case Failure(e) =>
+      unexpectedResponse("Brain sensor setup")(e)
   }
 
-  def locationReceive: Receive = {
-    case Robot.Location(locationNode) =>
-
-      implicit val timeout = Timeout(1, TimeUnit.SECONDS)
-      val locationParams = locationNode ? GetLocationParams
-
-      locationParams.onSuccess {
-        case LocationParams(params: LocationParamsT) =>
-          val from = statusReset(params)
-          observe(from, locationNode)
-
-        case other =>
-          failure(MissType(other.getClass), "Location params")
-      }
-
-      locationParams.onFailure {
-        case e =>
-          failure(e, "Can't receive location params!")
-      }
-
-      context.become(guideBrain(locationNode) orElse statusResponse, discardOld = false)
-  }
-
-  def statusResponse: Receive = {
-    case Robot.Status =>
-      sender() ! currentStatus
+  def receive: Receive = {
     case other =>
-      log.error(s"Unhandled message: $other")
+      unexpectedResponse("Message out of initialization!")(other)
   }
-
-  def receive: Receive = locationReceive orElse statusResponse
 }

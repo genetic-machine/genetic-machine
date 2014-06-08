@@ -1,4 +1,4 @@
 Genetic Machine
 ===============
 
-Genetic!!! Machine!!! Evolution!!! Selection!!! Adoptation!!! Only the strongest will survive!
+Genetic!!! Machine!!! Evolution!!! Selection!!! Adaptation!!! Only the strongest will survive!
