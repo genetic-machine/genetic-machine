@@ -47,7 +47,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] 
    * Robot's initialisation.
    * @return initial status and initial brain's input.
    */
-  val selfSetup: Future[(StatusT, InputT)]
+  def selfSetup(): Future[(StatusT, InputT)]
 
   /**
    * The "physics" of the location.
@@ -64,6 +64,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] 
    */
   final def guideBrain(status: StatusT): Receive = {
     case Brain.Output(data: OutputT) =>
+      log.info(s"Received: ${data.toString}")
       processOutput(status, data) match {
         case Some((newStatus: StatusT, inputData: InputT)) =>
           brain ! Brain.Input(inputData)
@@ -92,18 +93,19 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] 
   brainSensorSetup.onComplete {
     case Success(_) =>
       val brainActuatorSetup = brain ? Brain.Actuator(self)
-
       val generalSetup = for {
-        status <- selfSetup
+        status <- selfSetup()
         actuatorSetup <- brainActuatorSetup
         if actuatorSetup == MessageProtocol.Ready
       } yield status
 
       generalSetup.onComplete {
         case Failure(e) =>
+          println("Act set up!")
           failure(e)
 
         case Success((status, input)) =>
+          println("Act set up!")
           brain ! Brain.Input(input)
           context.become(training(status))
       }

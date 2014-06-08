@@ -1,8 +1,10 @@
 import akka.actor.{Props, ActorSystem}
-import god.God
+import robot._
+import robot.labyrinth._
 
 object Main extends App {
 
   val geneticMachine = ActorSystem("genetic-machine")
-  val god = geneticMachine.actorOf(Props(new God()), "God")
+  val brain = geneticMachine.actorOf(Props(classOf[DijkstraBrain]))
+  val robot = geneticMachine.actorOf(Props(new LabyrinthRobot(brain, 10, 10, 5)))
 }

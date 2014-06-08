@@ -1,7 +1,8 @@
 package robot
 
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{ActorLogging, ActorRef, Actor}
 import common.MessageProtocol
+import scala.reflect.ClassTag
 
 object Brain {
 
@@ -15,7 +16,7 @@ object Brain {
   case class Output[+OutputT](data: OutputT) extends Response
 }
 
-abstract class Brain[InputT, OutputT] extends Actor {
+abstract class Brain[InputT : ClassTag, OutputT : ClassTag] extends Actor with ActorLogging {
 
   import Brain._
 
