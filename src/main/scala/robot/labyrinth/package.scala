@@ -7,15 +7,25 @@ import scala.util.Random
 
 package object labyrinth {
 
+  type CellStatus = Int
+
   object CellStatus {
-    final val Free: Int = -1
-    final val Occupied: Int = 1
-    final val Unknown: Int = 0
+    final val Free: CellStatus = -1
+    final val Occupied: CellStatus = 1
+    final val Unknown: CellStatus = 0
   }
 
   import CellStatus._
 
-  type Labyrinth = DenseMatrix[Int]
+  type Labyrinth = DenseMatrix[CellStatus]
+
+  object Labyrinth {
+    def apply(rows: Int, cols: Int) = unknown(rows, cols)
+    def unknown(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Unknown)
+    def occupied(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Occupied)
+    def free(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Free)
+  }
+
   type CostMap = DenseMatrix[Int]
 
   /**
@@ -47,6 +57,11 @@ package object labyrinth {
     def *(other: Point) = Point(this.x * other.x - this.y * other.y,
       this.y * other.x + this.x * other.y)
 
+    def *(scale: Int) = Point(this.x * scale, this.x * scale)
+
+    def max(other: Point) = Point(this.x max other.x, this.y max other.y)
+    def min(other: Point) = Point(this.x min other.x, this.y min other.y)
+
     /** It isn't the complex division! **/
     def /(other: Point) = this * other.adjoint
 
@@ -69,6 +84,16 @@ package object labyrinth {
     def inLabyrinth(lab: Labyrinth): Boolean = inBorders(lab.rows, lab.cols) && (lab(x, y) != Occupied)
 
     def neighborsInLabyrinth(lab: Labyrinth) = neighbors filter { _.inLabyrinth(lab) }
+
+    def %(lab: Labyrinth): Point = {
+      val x_ = (0 max x) min (lab.rows - 1)
+      val y_ = (0 max y) min (lab.cols - 1)
+      Point(x_, y_)
+    }
+  }
+
+  object Point {
+    val zero = Point(0, 0)
   }
 
   type Path = Seq[Point]
@@ -109,7 +134,7 @@ package object labyrinth {
         n
       }
 
-      if (!newOpenSet.isEmpty && deep > 0) {
+      if (newOpenSet.nonEmpty && deep > 0) {
         deepFirstSearch(newOpenSet, closedSet.union(openSet), deep - 1)
       }
     }
@@ -118,76 +143,7 @@ package object labyrinth {
     costMap
   }
 
-  object Vision {
-    def vision(lab: Labyrinth, from: Point, deep: Int): Labyrinth = {
-      val size = 2 * deep + 1
-      val visionField = DenseMatrix.fill(size, size)(Unknown)
 
-      for {
-        x <- 0 until size
-        y <- 0 until size
-        labX = x - deep + from.x
-        labY = y - deep + from.y
-        if abs(x - deep) + abs(y - deep) <= deep
-      } {
-        visionField(x, y) = if (Point(labX, labY).inBorders(lab.rows, lab.cols)) lab(labX, labY) else Unknown
-      }
-
-      visionField
-    }
-
-    def applyVision(lab: Labyrinth, visionMap: Labyrinth, from: Point): Labyrinth = {
-      val deep = (visionMap.rows - 1) / 2
-      for {
-        x <- 0 until visionMap.rows
-        y <- 0 until visionMap.cols
-        labX = x + from.x - deep
-        labY = y + from.y - deep
-        if labX >= 0
-        if labY >= 0
-        if labX < lab.rows
-        if labY < lab.cols
-        if visionMap(x, y) != Unknown
-      } {
-        lab(labX, labY) = visionMap(x, y)
-      }
-
-      lab
-    }
-  }
-
-  def simpleLabyrinthGen(sizeX: Int, sizeY: Int): Labyrinth = {
-    val lab = DenseMatrix.fill(sizeX, sizeY)(Occupied)
-
-    val start = Point(0, (sizeY - 1) / 2)
-    val goal = Point(sizeX - 1, (sizeY - 1)/ 2)
-
-    def forward(p: Point, len: Int, direction: Direction): Point = {
-      if (len > 0) {
-        lab(p.x, p.y) = Free
-        if ((p + direction).inBorders(lab.rows, lab.cols)) {
-          forward(p + direction, len - 1, direction)
-        } else {
-          p
-        }
-      } else {
-        p
-      }
-    }
-
-    def gen(lab: Labyrinth, p: Point, goal: Point): Labyrinth = {
-      if (p != goal) {
-        val len = Random.nextInt(5) + 3
-        val direction = Direction.directions(Random.nextInt(4))
-        val newP = forward(p, len, direction)
-        gen(lab, newP, goal)
-      } else {
-        lab
-      }
-    }
-
-    gen(lab, start, goal)
-  }
 
   def printLab(lab: Labyrinth): DenseMatrix[Char] = {
     lab map {
