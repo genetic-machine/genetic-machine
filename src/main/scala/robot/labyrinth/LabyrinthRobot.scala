@@ -9,10 +9,15 @@ import robot.labyrinth.generators._
 
 case class LabyrinthStatus(visionMap: Labyrinth, labyrinth: Labyrinth,
                            robotPosition: Point, robotDirection: Direction.Direction,
-                           goal: Point) {
+                           goal: Point, path: Path, history: List[Command.Command]) {
 
   def printVisionMap: DenseMatrix[Char] = {
     val result = printLab(visionMap)
+
+    path.foreach { p =>
+      result(p.x, p.y) = '+'
+    }
+
     result(robotPosition.x, robotPosition.y) = robotDirection match {
       case Direction.North => 'V'
       case Direction.South => 'A'
@@ -30,19 +35,20 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator, val 
   import context.dispatcher
 
   def selfSetup() = Future {
-    val lab = labyrinthGen()
-    val start = Point(0, (lab.cols - 1) / 2)
-    val goal = Point(lab.rows - 1, (lab.cols - 1) / 2)
+    val (lab, start, goal) = labyrinthGen()
+
     val obs = vision(lab, start)
     val visionMap = obs.impose(Labyrinth.unknown(lab.rows, lab.cols))
 
-    val status = LabyrinthStatus(visionMap, lab, start, Direction.North, goal)
-    val initialInput = DijkstraInput(visionMap, start, Direction.North, goal)
+    val path = List(start)
+    val history = List()
 
+    val status = LabyrinthStatus(visionMap, lab, start, Direction.North, goal, path, history)
+    val initialInput = DijkstraInput(visionMap, start, Direction.North, goal)
     (status, initialInput)
   }
 
-  def processOutput(status: LabyrinthStatus, brainOutput: Command.Command): Option[(LabyrinthStatus, DijkstraInput)] = {
+  def processOutput(status: LabyrinthStatus, brainOutput: Command.Command) = Future {
     val (newPosition, newDirection) = brainOutput match {
       case Command.Forward if (status.robotPosition + status.robotDirection).inLabyrinth(status.labyrinth) =>
         (status.robotPosition + status.robotDirection, status.robotDirection)
@@ -54,18 +60,13 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator, val 
         (status.robotPosition, status.robotDirection.turnRight)
     }
 
-
+    val path = newPosition :: status.path
+    val history = brainOutput :: status.history
     val obs = vision(status.labyrinth, newPosition)
     obs.impose(status.visionMap)
-    val newStatus = LabyrinthStatus(status.visionMap, status.labyrinth, newPosition, newDirection, status.goal)
+    val newStatus = LabyrinthStatus(status.visionMap, status.labyrinth, newPosition, newDirection, status.goal, path, history)
     val newInput = DijkstraInput(status.visionMap, newPosition, newDirection, status.goal)
 
-    if (newPosition == status.goal) {
-      None
-    } else {
-      Some((newStatus, newInput))
-    }
+    (newStatus, if (newPosition == status.goal) None else Some(newInput))
   }
-
-  def training(status: LabyrinthStatus) = guideBrain(status)
 }

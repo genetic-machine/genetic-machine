@@ -2,15 +2,20 @@ package robot.labyrinth.vision
 
 import robot.labyrinth._
 
+object DijkstraVision {
+  def apply(deep: Int) = new DijkstraVision(deep)
+}
+
 class DijkstraVision(val deep: Int) extends Vision {
   def apply(labyrinth: Labyrinth, from: Point): Observation = {
     val vision = Labyrinth.unknown(2 * deep + 1, 2 * deep + 1)
     val offset = Point(deep, deep)
+    vision(offset.x, offset.y) = CellStatus.Free
 
-    def deepFirstSearch(openSet: Set[Point], closedSet: Set[Point]) {
+    def breadthFirstSearch(openSet: Set[Point], closedSet: Set[Point]) {
       val waveFront = for {
         p <- openSet
-        neigh <- p.neighborsInLabyrinth(labyrinth)
+        neigh <- p.neighbors.filter { _.inBorders(labyrinth.rows, labyrinth.cols) }
         if !closedSet.contains(neigh)
         if (neigh - from).l1Norm <= deep
       } yield {
@@ -24,11 +29,12 @@ class DijkstraVision(val deep: Int) extends Vision {
       }
 
       if (openFree.nonEmpty) {
-        deepFirstSearch(openFree, closedSet ++ closedOccupied)
+        println(printLab(vision))
+        breadthFirstSearch(openFree, closedSet ++ closedOccupied ++ openSet)
       }
     }
 
-    deepFirstSearch(Set(from), Set.empty)
+    breadthFirstSearch(Set(from), Set.empty)
 
     Observation(vision, from)
   }

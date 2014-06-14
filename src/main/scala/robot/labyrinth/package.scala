@@ -96,7 +96,7 @@ package object labyrinth {
     val zero = Point(0, 0)
   }
 
-  type Path = Seq[Point]
+  type Path = List[Point]
 
   object Command extends Enumeration {
     type Command = Value
@@ -123,7 +123,7 @@ package object labyrinth {
     val costMap = DenseMatrix.fill(lab.rows, lab.cols)(Int.MaxValue)
     costMap(from.x, from.y) = 0
 
-    def deepFirstSearch(openSet: Set[Point], closedSet: Set[Point], deep: Int) {
+    def breadthFirstSearch(openSet: Set[Point], closedSet: Set[Point], deep: Int) {
       val newOpenSet = for {
         p <- openSet
         n <- p.neighborsInLabyrinth(lab)
@@ -135,11 +135,11 @@ package object labyrinth {
       }
 
       if (newOpenSet.nonEmpty && deep > 0) {
-        deepFirstSearch(newOpenSet, closedSet.union(openSet), deep - 1)
+        breadthFirstSearch(newOpenSet, closedSet.union(openSet), deep - 1)
       }
     }
 
-    deepFirstSearch(Set[Point](from), Set.empty[Point], deep)
+    breadthFirstSearch(Set[Point](from), Set.empty[Point], deep)
     costMap
   }
 

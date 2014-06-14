@@ -1,13 +1,14 @@
 package robot
 
-import akka.actor.{ActorLogging, ActorRef, Actor}
+import akka.actor.{ ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
-import akka.util.Timeout
 import scala.util.{Failure, Success}
 import common.MessageProtocol
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-import java.util.concurrent.TimeUnit
+import akka.util.Timeout
+import scala.concurrent.duration._
+
 
 object Robot {
   import MessageProtocol._
@@ -15,9 +16,7 @@ object Robot {
   case object Status extends Request
   case object Statistic extends Request
 
-  case class StatusResponse[+StatusT](status: StatusT) extends Response
-  case class StatisticResponse[+StatisticT](statistic: StatisticT) extends Response
-  case class Finish(brain: ActorRef) extends Response
+  case class Finish[+StatusT](brain: ActorRef, status: StatusT) extends Response
   case class Failure(e: Throwable, brain: ActorRef) extends Response
 }
 
@@ -25,12 +24,19 @@ object Robot {
  * Provides shell for correct [[robot.Brain]] activity.
  * It's the adapter from 'real' world to abstract brain space.
  *
+ * Robot can't be stopped until the task is solved or an exception is raised.
+ *
+ * Robot is both sensor and actuator for brain.
+ *
  * @param brain brain to guide. It's not a child of robot, because brain is much more valuable than
- *              it's shell and it could be used outside, for example, in multi-robot.
+ *              it's shell and it could be used outside afterwards.
  */
-abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] (val brain: ActorRef) extends Actor with ActorLogging {
+abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
+                     OutputT : ClassTag] (val brain: ActorRef) extends Actor with ActorLogging {
 
   import context.dispatcher
+
+  implicit val timeout = Timeout(1 minute)
 
   def unexpectedResponse(reason: String)(msg: Any) {
     val e = MessageProtocol.UnexpectedResponse(reason, msg)
@@ -39,7 +45,6 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] 
   }
 
   def failure(e: Throwable) {
-    brain ! Brain.Reset
     context.parent ! Robot.Failure(e, brain)
   }
 
@@ -56,66 +61,73 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag, OutputT : ClassTag] 
    * @param brainOutput brain's response
    * @return Some(), that includes new robot's status and new brain's input, if goal is not achieved, otherwise None
    */
-  def processOutput(status: StatusT, brainOutput: OutputT): Option[(StatusT, InputT)]
+  def processOutput(status: StatusT, brainOutput: OutputT): Future[(StatusT, Option[InputT])]
+
+  final def busy: Receive = {
+    case _ =>
+      context.sender() ! MessageProtocol.Busy
+  }
 
   /**
-   * Process brain outputs.
+   * Processes brain outputs.
    * @param status
    */
   final def guideBrain(status: StatusT): Receive = {
     case Brain.Output(data: OutputT) =>
-      log.info(s"Received: ${data.toString}")
-      processOutput(status, data) match {
-        case Some((newStatus: StatusT, inputData: InputT)) =>
-          brain ! Brain.Input(inputData)
-          context.become(training(newStatus), discardOld = true)
 
-        case None =>
-          context.parent ! Robot.Finish(brain)
-          context.unbecome()
+      val state = processOutput(status, data)
+      context.become(busy, discardOld = true)
+
+      state onSuccess {
+        case (newStatus: StatusT, Some(inputData: InputT)) =>
+          brain ! Brain.Input (inputData)
+          context.become (guideBrain (newStatus), discardOld = true)
+
+        case (newStatus: StatusT, None) =>
+          (brain ? Brain.Unbind).onComplete {
+            case Success(MessageProtocol.Ready) =>
+              context.parent ! Robot.Finish(brain, newStatus)
+
+            case Failure(e) =>
+              context.parent ! Robot.Failure(e, brain)
+
+            case msg =>
+              context.parent ! Robot.Failure(MessageProtocol.UnexpectedResponse("brain release", msg), brain)
+          }
       }
+
+      state onFailure {
+        case e => failure(e)
+      }
+
+    case msg if context.sender() == brain =>
+      unexpectedResponse("brain wrong response")(msg)
+
+    case _ =>
+      context.sender() ! MessageProtocol.Busy
   }
 
-  /**
-   * Complex behaviour to process all request during the training.
-   * Must include guideBrain behaviour!
-   * @param status current status of robot, i.e. status of location, robot's position.
-   */
-  def training(status: StatusT): Receive
-
-  implicit val timeout = Timeout(1, TimeUnit.SECONDS)
-
-  val brainSensorSetup = for {
-    result <- brain ? Brain.Sensor(self)
-    if result == MessageProtocol.Done
+  final val brainSetup = for {
+    result <- brain ? Brain.Bind(self, self)
+    if result == MessageProtocol.Ready
   } yield result
 
-  brainSensorSetup.onComplete {
-    case Success(_) =>
-      val brainActuatorSetup = brain ? Brain.Actuator(self)
-      val generalSetup = for {
-        status <- selfSetup()
-        actuatorSetup <- brainActuatorSetup
-        if actuatorSetup == MessageProtocol.Ready
-      } yield status
+  final val generalSetup = for {
+    _ <- brainSetup
+    (status, input) <- selfSetup()
+  } yield (status, input)
 
-      generalSetup.onComplete {
-        case Failure(e) =>
-          println("Act set up!")
-          failure(e)
-
-        case Success((status, input)) =>
-          println("Act set up!")
-          brain ! Brain.Input(input)
-          context.become(training(status))
-      }
+  generalSetup.onComplete {
+    case Success((status, input)) =>
+      context.become(guideBrain(status))
+      brain ! Brain.Input(input)
 
     case Failure(e) =>
-      unexpectedResponse("Brain sensor setup")(e)
+      failure(e)
   }
 
-  def receive: Receive = {
-    case other =>
-      unexpectedResponse("Message out of initialization!")(other)
+  final def receive: Receive = {
+    case _ =>
+      context.sender ! MessageProtocol.Busy
   }
 }

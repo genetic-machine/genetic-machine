@@ -4,6 +4,10 @@ import breeze.linalg.DenseMatrix
 import scala.math._
 import robot.labyrinth.{ Labyrinth, Point, CellStatus}
 
+object SimpleVision {
+  def apply(deep: Int) = new SimpleVision(deep)
+}
+
 class SimpleVision(val deep: Int) extends Vision {
   def apply(lab: Labyrinth, from: Point): Observation = {
     val size = 2 * deep + 1
