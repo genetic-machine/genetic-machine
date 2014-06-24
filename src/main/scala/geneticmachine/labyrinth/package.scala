@@ -1,4 +1,4 @@
-package robot
+package geneticmachine
 
 import breeze.linalg.DenseMatrix
 import scala.math._
@@ -85,6 +85,7 @@ package object labyrinth {
 
     def neighborsInLabyrinth(lab: Labyrinth) = neighbors filter { _.inLabyrinth(lab) }
 
+    /** 'Crop' operator */
     def %(lab: Labyrinth): Point = {
       val x_ = (0 max x) min (lab.rows - 1)
       val y_ = (0 max y) min (lab.cols - 1)
@@ -98,12 +99,22 @@ package object labyrinth {
 
   type Path = List[Point]
 
-  object Command extends Enumeration {
-    type Command = Value
+  object LabyrinthCommand extends Enumeration {
+    type LabyrinthCommand = Value
     val TurnLeft, TurnRight, Forward = Value
   }
 
-  type CommandSignal = Map[Command.Command, Double]
+  type CommandSignal = Map[LabyrinthCommand.LabyrinthCommand, Double]
+
+  object CommandSignal {
+    def empty = Map (
+      LabyrinthCommand.Forward -> 0.0,
+      LabyrinthCommand.TurnLeft -> 0.0,
+      LabyrinthCommand.TurnRight -> 0.0
+    )
+
+    def apply(cs: CommandSignal) = empty ++ cs
+  }
 
   object Direction {
 
@@ -153,21 +164,30 @@ package object labyrinth {
     }
   }
 
-  def directionToCommand(robotDirection: Direction)(direction: Direction): Seq[Command.Command] = {
+  def labToString(lab: DenseMatrix[Char]): String = {
+    val seqMatrix = for {
+      x <- 0 until lab.rows
+    } yield for {
+        y <- 0 until lab.cols
+      } yield lab(x, y)
+
+    seqMatrix.map { _.mkString("") }.mkString("\n")
+  }
+
+  def directionToCommand(robotDirection: Direction)(direction: Direction): Seq[LabyrinthCommand.LabyrinthCommand] = {
     val robotDirectionLeft = robotDirection.turnLeft
     val robotDirectionRight = robotDirection.turnRight
     direction match {
-      case `robotDirection` => Seq(Command.Forward)
-      case `robotDirectionLeft` => Seq(Command.TurnLeft)
-      case `robotDirectionRight` => Seq(Command.TurnRight)
-      case _ => Seq(Command.TurnLeft, Command.TurnRight)
+      case `robotDirection` => Seq(LabyrinthCommand.Forward)
+      case `robotDirectionLeft` => Seq(LabyrinthCommand.TurnLeft)
+      case `robotDirectionRight` => Seq(LabyrinthCommand.TurnRight)
+      case _ => Seq(LabyrinthCommand.TurnLeft, LabyrinthCommand.TurnRight)
     }
   }
 
-  def minPathSensor(lab: Labyrinth, from: Point,
-                    robotDirection: Direction,
-                    cost: CostMap): CommandSignal = {
-    val fromCost = cost(from.x, from.y)
+  def strictMinPathSensor(lab: Labyrinth, from: Point,
+                          robotDirection: Direction,
+                          cost: CostMap): CommandSignal = {
 
     val localCost = for {
       dir <- directions
@@ -179,13 +199,45 @@ package object labyrinth {
     val (_, minCost) = localCost min (Ordering by { x: (Direction, Int) => x._2 })
     val minDirs = localCost filter { _._2 == minCost } map { _._1 }
 
-    (for {
-      dir <- minDirs
-      command <- directionToCommand(robotDirection)(dir)
-    } yield (command, 1.0)).toMap
+    CommandSignal {
+      (for {
+        dir <- minDirs
+        command <- directionToCommand(robotDirection)(dir)
+      } yield (command, 1.0)).toMap
+    }
   }
 
-  def minPathSensor(lab: Labyrinth, from: Point,
-                    robotDirection: Direction, goal: Point): CommandSignal =
-    minPathSensor(lab, from, robotDirection, costMap(lab, goal))
+
+  case class LabyrinthInput(lab: Labyrinth, robotPosition: Point, robotDirection: Direction, goal: Point)
+
+  case class LabyrinthStatus(visionMap: Labyrinth, labyrinth: Labyrinth,
+                             robotPosition: Point, robotDirection: Direction.Direction,
+                             goal: Point, path: Path, history: List[LabyrinthCommand.LabyrinthCommand]) {
+
+    def toCharMap: DenseMatrix[Char] = {
+      val result = printLab(visionMap)
+
+      path.foreach { p =>
+        result(p.x, p.y) = '+'
+      }
+
+      result(robotPosition.x, robotPosition.y) = robotDirection match {
+        case Direction.North => 'V'
+        case Direction.South => 'A'
+        case Direction.West => '>'
+        case Direction.East => '<'
+      }
+
+      result
+    }
+  }
+
+  def strictMinPathSensor(labInput: LabyrinthInput): CommandSignal = {
+    val LabyrinthInput(lab, from, robotDirection, goal) = labInput
+    strictMinPathSensor(lab, from, robotDirection, costMap(lab, goal))
+  }
+
+  type LabyrinthOutput = LabyrinthCommand.LabyrinthCommand
+
+  case class LabyrinthScore(score: Double)
 }

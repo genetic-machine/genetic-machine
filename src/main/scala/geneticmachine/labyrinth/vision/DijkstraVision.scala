@@ -1,6 +1,6 @@
-package robot.labyrinth.vision
+package geneticmachine.labyrinth.vision
 
-import robot.labyrinth._
+import geneticmachine.labyrinth._
 
 object DijkstraVision {
   def apply(deep: Int) = new DijkstraVision(deep)

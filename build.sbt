@@ -4,6 +4,8 @@ version := "1.0"
 
 scalaVersion := "2.11.1"
 
+scalacOptions += "-feature"
+
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.1.5" % "test"
@@ -22,3 +24,7 @@ resolvers ++= Seq(
   "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
   "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
 )
+
+libraryDependencies += "org.neo4j" % "neo4j" % "2.1.2"
+
+libraryDependencies += "org.scala-lang" % "scala-pickling_2.11" % "0.8.0"

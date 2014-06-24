@@ -1,7 +1,7 @@
-package robot.labyrinth.generators
+package geneticmachine.labyrinth.generators
 
-import robot.labyrinth.Direction._
-import robot.labyrinth._
+import geneticmachine.labyrinth.Direction._
+import geneticmachine.labyrinth._
 
 import scala.util.Random
 

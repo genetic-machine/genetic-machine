@@ -1,7 +1,7 @@
 package test.labyrinth
 
-import robot.labyrinth._
-import robot.labyrinth.generators.RandomWalkGenerator
+import geneticmachine.labyrinth._
+import geneticmachine.labyrinth.generators.RandomWalkGenerator
 import org.scalatest._
 import breeze.linalg.DenseMatrix
 
@@ -53,7 +53,7 @@ class LabyrinthUtilsSpec extends FlatSpec with Matchers {
     assert(costMap(labFromChars(lab), Point(0, 0)) == costFromChars(lab))
   }
 
-  "SimpleLabyrinthGenerator" must "return test.labyrinth with exit" in {
+  "SimpleLabyrinthGenerator" must "return a labyrinth with exit" in {
     val (rows, cols) = (1001, 1001)
     val (lab, start, goal) = RandomWalkGenerator(3, 5)(rows, cols)()
     val cost = costMap(lab, start)

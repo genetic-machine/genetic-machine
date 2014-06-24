@@ -1,6 +1,6 @@
-package robot.labyrinth
+package geneticmachine.labyrinth
 
-import robot.labyrinth.Direction._
+import geneticmachine.labyrinth.Direction._
 
 package object generators {
   trait LabyrinthGenerator {

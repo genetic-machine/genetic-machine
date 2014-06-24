@@ -1,8 +1,8 @@
-package robot.labyrinth.vision
+package geneticmachine.labyrinth.vision
 
 import breeze.linalg.DenseMatrix
 import scala.math._
-import robot.labyrinth.{ Labyrinth, Point, CellStatus}
+import geneticmachine.labyrinth.{ Labyrinth, Point, CellStatus}
 
 object SimpleVision {
   def apply(deep: Int) = new SimpleVision(deep)

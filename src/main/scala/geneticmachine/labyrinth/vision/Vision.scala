@@ -1,6 +1,6 @@
-package robot.labyrinth.vision
+package geneticmachine.labyrinth.vision
 
-import robot.labyrinth._
+import geneticmachine.labyrinth._
 
 final case class Observation(visionMap: Labyrinth, from: Point) {
   def impose(lab: Labyrinth): Labyrinth = {
