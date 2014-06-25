@@ -19,12 +19,12 @@ object PickleDriver {
     def apply(ubf: UnifiedBrainFormat) = new PickleUBF(ubf.brainType, ubf.parentID, ubf.nodes.toList, ubf.inputNodeId, ubf.outputNodeId)
   }
 
-  /** Pickler doesn't work with Vector[Node] now, but do work with List */
+  /** Pickler doesn't work with Vector[Node], but do work with List */
   final class PickleUBF(val brainType: String, val parentId: Long, val nodes: List[Node], val inputNodeId: Int, val outputNodeId: Int) {
   }
 }
 
-class PickleDriver(var dbPath: String)(implicit val context: ExecutionContext) extends UnifiedBrainFormatDriver {
+class PickleDriver(dbPath: String)(implicit val context: ExecutionContext) extends UnifiedBrainFormatDriver(dbPath) {
 
   import PickleDriver._
 

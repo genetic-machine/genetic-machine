@@ -4,6 +4,8 @@ object MessageProtocol {
   abstract class Request
   abstract class Response
 
+  case object Init extends Request
+
   case class Fail(e: Throwable) extends Response
   case object Ready extends Response
   case object Busy extends Response

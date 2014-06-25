@@ -6,7 +6,7 @@ import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
-import common.{ MessageProtocol => MP }
+import common.{MessageProtocol => MP, InitializationProtocol}
 
 object Brain {
 
@@ -16,7 +16,6 @@ object Brain {
   case class Output[OutputT : ClassTag](data: OutputT) extends Response
   case class Feedback[FeedbackT : ClassTag](data: FeedbackT) extends Request
 
-  case object Init extends Request
   case object Reset extends Request
 
   case object Serialize extends Request
@@ -24,11 +23,16 @@ object Brain {
 }
 
 abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
-                     FeedbackT : ClassTag, StateT: ClassTag](ubf: UnifiedBrainFormat) extends Actor with ActorLogging {
+                     FeedbackT : ClassTag, StateT : ClassTag](ubf: UnifiedBrainFormat)
+  extends Actor with InitializationProtocol[StateT] with ActorLogging {
 
   import context.dispatcher
 
-  def init(ubf: UnifiedBrainFormat): Future[StateT]
+  def init(): Future[StateT]
+
+  def initialize(state: StateT) {
+    context.become(initialized(state), discardOld = true)
+  }
 
   def process(state: StateT, input: InputT): Future[(StateT, OutputT)]
   def feedback(state: StateT, feedback: FeedbackT): Future[StateT]
@@ -102,18 +106,5 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
       serialize_(state, context.sender())
   }
 
-  init(ubf).onComplete {
-    case Success(state: StateT) =>
-      context.become(initialized(state), discardOld = true)
-      context.parent ! MP.Ready
-
-    case Failure(e: Throwable) =>
-      context.parent ! MP.Fail(MP.InitializationFailure(e))
-      context.stop(self)
-  }
-
-  final def receive: Receive = {
-    case _ =>
-      MP.Busy
-  }
+  final def receive: Receive =  uninitialized
 }

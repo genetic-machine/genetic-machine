@@ -2,6 +2,8 @@ package test.labyrinth
 
 import akka.actor.{ActorRef, ActorSystem, Actor, Props}
 import akka.testkit.TestKit
+import akka.pattern.ask
+
 import common.MessageProtocol
 import org.scalatest.WordSpecLike
 import org.scalatest.Matchers
@@ -15,6 +17,8 @@ import geneticmachine.labyrinth.generators.RandomWalkGenerator
 import geneticmachine.labyrinth.vision.{Vision, SimpleVision}
 import geneticmachine.Robot
 
+import scala.util.Success
+
 class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
   with WordSpecLike with Matchers with BeforeAndAfterAll {
 
@@ -26,11 +30,25 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
 
   class RobotBrainActor(val labGen: LabyrinthGenerator, val vision: Vision) extends Actor {
     val brain = context.actorOf(Props(new DijkstraBrain()))
+    import context.dispatcher
+    implicit val timeout: akka.util.Timeout = akka.util.Timeout(10, scala.concurrent.duration.SECONDS)
+
+    (brain ? MessageProtocol.Init).onComplete {
+      case Success(MessageProtocol.Ready) =>
+        val robot = context.actorOf(Props(new LabyrinthRobot(brain, labGen, vision)))
+        (robot ? MessageProtocol.Init).onComplete {
+          case Success(MessageProtocol.Ready) =>
+            context.become(wait(robot))
+          case _ =>
+            throw new Exception("Failed robot initialization!")
+        }
+
+      case _ =>
+        throw new Exception("Failed brain initialization!")
+    }
 
     override def receive: Receive = {
-      case MessageProtocol.Ready if sender() == brain =>
-        val robot = context.actorOf(Props(new LabyrinthRobot(brain, labGen, vision)))
-        context.become(wait(robot))
+      case _ =>
     }
 
     def wait(robot: ActorRef): Receive = {

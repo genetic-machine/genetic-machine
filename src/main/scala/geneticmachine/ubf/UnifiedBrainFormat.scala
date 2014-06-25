@@ -168,7 +168,7 @@ final case class UnifiedBrainFormatBuilder(brainType: String, parentID: Long) {
   }
 }
 
-trait UnifiedBrainFormatDriver {
+abstract class UnifiedBrainFormatDriver(val dbPath: String) {
   def save(ubf: UnifiedBrainFormat): Future[Long]
   def load(id: Long): Future[UnifiedBrainFormat]
 }

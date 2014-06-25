@@ -27,7 +27,7 @@ object Neo4JDriver {
   val outputLabel = DynamicLabel.label("OUTPUT")
 }
 
-final class Neo4JDriver(val dbPath: String)(implicit val context: ExecutionContext) extends UnifiedBrainFormatDriver {
+final class Neo4JDriver(dbPath: String)(implicit val context: ExecutionContext) extends UnifiedBrainFormatDriver(dbPath) {
 
   import Neo4JDriver._
 

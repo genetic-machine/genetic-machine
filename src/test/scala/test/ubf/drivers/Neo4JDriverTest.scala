@@ -1,5 +1,7 @@
 package test.ubf.drivers
 
+import test._
+
 import org.scalatest._
 import geneticmachine.ubf.drivers._
 import geneticmachine.ubf.UnifiedBrainFormat
@@ -27,5 +29,18 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
     println(s"Brain Id: $id")
     val loaded = Await.result(driver.load(id), 1.second)
     println(loaded)
+  }
+
+  it must "be concurrent" in {
+    val (t, _) = timed {
+      val requests = for {
+        _ <- 0 until 100
+      } yield driver.save(ubf)
+
+      val metaRequest = Future.sequence(requests)
+      Await.result(metaRequest, 10.second)
+    }
+
+    println(s"Time: $t")
   }
 }

@@ -3,7 +3,7 @@ package geneticmachine
 import akka.actor.{ ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
 import scala.util.{Failure, Success}
-import common.MessageProtocol
+import common.{InitializationProtocol, MessageProtocol}
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import akka.util.Timeout
@@ -33,7 +33,7 @@ object Robot {
  */
 abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
                      OutputT : ClassTag, ActuatorResponseT : ClassTag]
-  (val brain: ActorRef) extends Actor with ActorLogging {
+  (val brain: ActorRef) extends Actor with InitializationProtocol[(StatusT, InputT)] with ActorLogging {
 
   import context.dispatcher
 
@@ -54,6 +54,12 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * @return initial status and initial brain's input.
    */
   def init(): Future[(StatusT, InputT)]
+
+  final def initialize(statusAndInput: (StatusT, InputT)) {
+    val (status, input) = statusAndInput
+    context.become(scoreBrain(status))
+    brain ! Brain.Input(input)
+  }
 
   /**
    * The "physics" of the location.
@@ -130,17 +136,5 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
       unexpectedResponse(s"must be ${classOf[Brain.Output[OutputT]]}", msg)
   }
 
-  init().onComplete {
-    case Success((status, input)) =>
-      context.become(scoreBrain(status))
-      brain ! Brain.Input(input)
-
-    case Failure(e) =>
-      failure(e)
-  }
-
-  final def receive: Receive = {
-    case _ =>
-      context.sender ! MessageProtocol.Busy
-  }
+  final def receive: Receive = uninitialized
 }
