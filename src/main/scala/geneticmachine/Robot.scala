@@ -3,7 +3,7 @@ package geneticmachine
 import akka.actor.{ ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
 import scala.util.{Failure, Success}
-import common.{InitializationProtocol, MessageProtocol}
+import common.MessageProtocol
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import akka.util.Timeout
@@ -13,27 +13,23 @@ import scala.concurrent.duration._
 object Robot {
   import MessageProtocol._
 
-  case object Status extends Request
-  case object Statistic extends Request
-
   case class Finish[+StatusT : ClassTag](brain: ActorRef, status: StatusT) extends Response
   case class Failure(e: Throwable, brain: ActorRef) extends Response
 }
 
 /**
  * Provides shell for correct [[geneticmachine.Brain]] activity.
- * It's the adapter from 'real' world to abstract brain space.
+ * It's an adapter from 'real' world to abstract brain terms.
  *
- * Robot can't be stopped until the task is solved or an exception is raised.
+ * Robot *can't* be stopped until the task is solved or an exception is received.
  *
- * Robot is both sensor and actuator for brain.
+ * Robot is both sensor and actuator for the brain.
  *
- * @param brain brain to guide. It's not a child of robot, because brain is much more valuable than
- *              it's shell and it could be used outside afterwards.
+ *@param brain brain to guide.
  */
 abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
                      OutputT : ClassTag, ActuatorResponseT : ClassTag]
-  (val brain: ActorRef) extends Actor with InitializationProtocol[(StatusT, InputT)] with ActorLogging {
+  (val brain: ActorRef) extends Actor with ActorLogging {
 
   import context.dispatcher
 
@@ -53,13 +49,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * Robot's initialisation.
    * @return initial status and initial brain's input.
    */
-  def init(): Future[(StatusT, InputT)]
-
-  final def initialize(statusAndInput: (StatusT, InputT)) {
-    val (status, input) = statusAndInput
-    context.become(scoreBrain(status))
-    brain ! Brain.Input(input)
-  }
+  def init: (StatusT, InputT)
 
   /**
    * The "physics" of the location.
@@ -136,5 +126,9 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
       unexpectedResponse(s"must be ${classOf[Brain.Output[OutputT]]}", msg)
   }
 
-  final def receive: Receive = uninitialized
+  final val receive: Receive = {
+    val (status, input) = init
+    brain ! Brain.Input(input)
+    scoreBrain(status)
+  }
 }

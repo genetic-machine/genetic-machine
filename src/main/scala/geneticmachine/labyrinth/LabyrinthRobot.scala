@@ -11,7 +11,7 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator, val 
 
   import context.dispatcher
 
-  def init() = Future {
+  override def init = {
     val (lab, start, goal) = labyrinthGen()
 
     val obs = vision(lab, start)

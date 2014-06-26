@@ -19,9 +19,9 @@ class DijkstraBrain
 
   override def serialize(state: Integer) = Future.successful(DijkstraBrain.serialization)
 
-  override def init() = Future.successful(0)
+  override def init(ubf: UnifiedBrainFormat): Integer = 0
 
-  override def process(stepCounter: Integer, data: LabyrinthInput): Future[(Integer, LabyrinthCommand)] = Future {
+  override def input(stepCounter: Integer, data: LabyrinthInput): Future[(Integer, LabyrinthCommand)] = Future {
     val (command, _) = strictMinPathSensor(data).max(Ordering by { x: (LabyrinthCommand.LabyrinthCommand, Double) => x._2 })
     val newState: Integer = stepCounter + 1
     (newState, command)

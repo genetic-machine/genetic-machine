@@ -1,14 +1,13 @@
-package test.ubf.drivers
+package test.db.drivers
 
+import geneticmachine.db.drivers._
+import geneticmachine.ubf.UnifiedBrainFormat
+import org.scalatest._
 import test._
 
-import org.scalatest._
-import geneticmachine.ubf.drivers._
-import geneticmachine.ubf.UnifiedBrainFormat
-
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
 
 class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers with BeforeAndAfterAll {
 
@@ -16,6 +15,7 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
 
   override def afterAll() {
     driver.shutdown()
+    cleanDirectory("./test-db-driver")
   }
 
   val ubf = UnifiedBrainFormat.sample(10)
@@ -24,10 +24,9 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
 
   it must "save and load ubf properly" in {
     println(ubf)
-    val saving = driver.save(ubf)
-    val id = Await.result(saving, 1.second)
+    val id = driver.saveBrain(ubf)
     println(s"Brain Id: $id")
-    val loaded = Await.result(driver.load(id), 1.second)
+    val loaded = driver.loadBrain(id)
     println(loaded)
   }
 
@@ -35,7 +34,7 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
     val (t, _) = timed {
       val requests = for {
         _ <- 0 until 100
-      } yield driver.save(ubf)
+      } yield Future { driver.saveBrain(ubf) }
 
       val metaRequest = Future.sequence(requests)
       Await.result(metaRequest, 10.second)

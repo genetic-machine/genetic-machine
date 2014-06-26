@@ -1,13 +1,12 @@
-package geneticmachine.ubf.drivers
+package geneticmachine.db.drivers
 
 import geneticmachine.ubf._
 import geneticmachine.ubf.UnifiedBrainFormat._
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.pickling._
-import json._
 import java.io._
-import scala.io.Source
+
+import scala.pickling._
+import binary._
 
 object PickleDriver {
 
@@ -24,46 +23,54 @@ object PickleDriver {
   }
 }
 
-class PickleDriver(dbPath: String)(implicit val context: ExecutionContext) extends UnifiedBrainFormatDriver(dbPath) {
+class PickleDriver(val dbPath: String) extends DBDriver {
 
   import PickleDriver._
 
-  val filePattern = """brain_(\d+)\.json""".r
-  def getFileName(id: Long): String = s"brain_$id.json"
+  val filePattern = """brain_(\d+)\.bin""".r
+  def getFileName(id: Long): String = s"brain_$id.bin"
 
   val dbDir = new File(dbPath)
   dbDir.mkdirs()
 
   var lastIndex: Long = {
     val files = dbDir.listFiles()
+
     val ids = for {
       file <- files
       name = file.getName
-      filePattern(idString) <- name
-      id = idString.toLong
-    } yield id
+      anchors = filePattern.unapplySeq(name)
+      if anchors.isDefined
+    } yield anchors.get.apply(0).toLong
 
     if (ids.size > 0) ids.max + 1 else 0
   }
 
-  override def save(ubf: UnifiedBrainFormat): Future[Long] = Future {
-    val brainID = lastIndex
-    lastIndex += 1
+  override def saveBrain(ubf: UnifiedBrainFormat): Long = {
+    val brainID = this.synchronized {
+      val index = lastIndex
+      lastIndex += 1
+      index
+    }
 
     val pickled = PickleUBF(ubf).pickle
     val file = new File(dbDir, getFileName(brainID))
-    val pw = new PrintWriter(file)
-    pw.write(pickled.value)
-    pw.close()
+    val fw = new FileOutputStream(file)
+    fw.write(pickled.value)
+    fw.close()
 
     brainID
   }
 
-  override def load(brainId: Long): Future[UnifiedBrainFormat] = Future {
-    val path = new File(dbDir, getFileName(brainId)).getPath
-    val pickled = Source.fromFile(path).mkString
-    val PickleUBF(ubf) = JSONPickle(pickled).unpickle[PickleUBF]
+  override def loadBrain(brainId: Long): UnifiedBrainFormat = {
+    val file = new File(dbDir, getFileName(brainId))
+    val fr = new FileInputStream(file)
+    val pickled = new Array[Byte](fr.available())
+    fr.read(pickled)
+    val PickleUBF(ubf) = BinaryPickle(pickled).unpickle[PickleUBF]
 
     ubf
   }
+
+  override def shutdown(): Unit = ()
 }

@@ -1,10 +1,8 @@
-package geneticmachine.ubf.drivers
+package geneticmachine.db.drivers
 
 import geneticmachine.ubf.UnifiedBrainFormatBuilder.NodeRef
-import geneticmachine.ubf.{UnifiedBrainFormat => UBF, UnifiedBrainFormatBuilder, UnifiedBrainFormatDriver}
+import geneticmachine.ubf.{UnifiedBrainFormat => UBF, UnifiedBrainFormatBuilder}
 import geneticmachine.ubf.UnifiedBrainFormat.{ Node => UBFNode, Port}
-
-import scala.concurrent.{Future, ExecutionContext}
 
 import org.neo4j.graphdb._
 import org.neo4j.graphdb.factory.GraphDatabaseFactory
@@ -27,17 +25,17 @@ object Neo4JDriver {
   val outputLabel = DynamicLabel.label("OUTPUT")
 }
 
-final class Neo4JDriver(dbPath: String)(implicit val context: ExecutionContext) extends UnifiedBrainFormatDriver(dbPath) {
+final class Neo4JDriver(val dbPath: String) extends DBDriver {
 
   import Neo4JDriver._
 
   val graphDB = new GraphDatabaseFactory().newEmbeddedDatabase(dbPath)
 
-  scala.sys.addShutdownHook {
+  val shutdownHook = scala.sys.addShutdownHook {
     graphDB.shutdown()
   }
 
-  def shutdown() { graphDB.shutdown() }
+  def shutdown() = { shutdownHook.remove(); graphDB.shutdown() }
 
   def createNode(ubfNode: UBFNode, label: Label): NeoNode = {
     val neoNode = graphDB.createNode(label)
@@ -54,7 +52,7 @@ final class Neo4JDriver(dbPath: String)(implicit val context: ExecutionContext) 
     neoNode
   }
 
-  def withTx[T](body: => T): Future[T] = Future {
+  def withTx[T](body: => T): T = {
     val tx = graphDB.beginTx()
     val result = Try {
       body
@@ -72,7 +70,7 @@ final class Neo4JDriver(dbPath: String)(implicit val context: ExecutionContext) 
     result.get
   }
 
-  override def save(ubf: UBF): Future[Long] = withTx {
+  override def saveBrain(ubf: UBF): Long = withTx {
 
     val brainNode = graphDB.createNode(brainLabel)
     brainNode.setProperty("$type", ubf.brainType)
@@ -130,7 +128,7 @@ final class Neo4JDriver(dbPath: String)(implicit val context: ExecutionContext) 
     (portFrom, portTo)
   }
 
-  override def load(id: Long): Future[UBF] = withTx {
+  override def loadBrain(id: Long): UBF = withTx {
     val brain = graphDB.getNodeById(id)
 
     def getOnlyConnectedNode(node: NeoNode, rel: RelationshipType): NeoNode = {

@@ -1,8 +1,6 @@
 package geneticmachine
 
-import geneticmachine.ubf._
-
-import akka.actor.{ Props, ActorLogging, Actor}
+import akka.actor.{ActorRef, Props, ActorLogging, Actor}
 
 object Environment {
   import common.MessageProtocol._
@@ -14,7 +12,9 @@ object Environment {
   case class RobotReady(robotID: Long) extends Response
 }
 
-class Environment(dbDriver: UnifiedBrainFormatDriver) extends Actor with ActorLogging {
+abstract class Environment extends Actor with ActorLogging {
+
+  val dbActor: ActorRef
 
   def receive: Receive = {
     case _ =>

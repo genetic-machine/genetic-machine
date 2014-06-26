@@ -6,7 +6,7 @@ import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
-import common.{MessageProtocol => MP, InitializationProtocol}
+import common.{MessageProtocol => MP}
 
 object Brain {
 
@@ -22,23 +22,94 @@ object Brain {
   case class Serialized(ubf: UnifiedBrainFormat) extends Response
 }
 
+/**
+ * Base class for brain functionality.
+ * Only methods `init`, `input`, `feedback`, `serialize`, `reset` need to be overridden.
+ * Designed to use with [[geneticmachine.Robot]] actor.
+ *
+ * The all methods above, except `init`, must be implemented through `Future` since
+ * the brain could communicate with its childs to obtain the response.
+ * In this case, it's convinient to use `ask` pattern and future compositions.
+ * Otherwise, [[scala.concurrent.Future.successful]] can be used.
+ *
+ * The usual workflow
+ * (the -[msg]->` means direct passing of message `msg`,
+ * `~futureF(data)~> msg->` means response with message `msg` as result of concurrent call (through `Future`) of method `futureF`):
+ * {{{
+ *   robot -Input(inData)-> brain
+ *   brain ~input(inData)~> Output(outData)-> robot
+ *   robot -Feedback(feedbackData)-> brain
+ *   brain ~feedback(feedbackData)~> Ready-> robot
+ *   ...
+ *   robot -Reset-> brain
+ *   brain ~reset()~> Ready-> robot
+ *
+ *   nextRobot -Input(inData)-> brain
+ *   ...
+ *
+ *   parent -Serialize-> brain
+ *   brain ~serialize()~> Serialized(ubf) -> parent
+ *   stop or continue
+ * }}}
+ *
+ * @param ubf description of the initial brain structure.
+ * @tparam InputT type of input messages.
+ * @tparam OutputT type of output messages.
+ * @tparam FeedbackT type of feedback messages
+ * @tparam StateT type of inner state.
+ */
 abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
                      FeedbackT : ClassTag, StateT : ClassTag](ubf: UnifiedBrainFormat)
-  extends Actor with InitializationProtocol[StateT] with ActorLogging {
+  extends Actor with ActorLogging {
 
   import context.dispatcher
 
-  def init(): Future[StateT]
+  /**
+   * Returns initial state of actor by provided UBF description.
+   * Brain must be able to handle Input requests right after the initialization.
+   * Not in future just for convinience of not handling the race during deferred initialization.
+   */
+  def init(ubf: UnifiedBrainFormat): StateT
 
-  def initialize(state: StateT) {
-    context.become(initialized(state), discardOld = true)
-  }
+  /**
+   * Processes input data.
+   * @param state current state of brain.
+   * @param inputData incoming data.
+   * @return the pair of new brain's state and response.
+   */
+  def input(state: StateT, inputData: InputT): Future[(StateT, OutputT)]
 
-  def process(state: StateT, input: InputT): Future[(StateT, OutputT)]
-  def feedback(state: StateT, feedback: FeedbackT): Future[StateT]
+  /**
+   * Processess feedback of previous output.
+   * Feedback *isn't* a new world's state, it contains only information about efficiency of previous output.
+   * Depending on this information the brain is learned, so feedback is the tool of supervised learning.
+   * @param state current state of brain.
+   * @param feedbackData feedback data.
+   * @return new brain's state.
+   */
+  def feedback(state: StateT, feedbackData: FeedbackT): Future[StateT]
 
+  /**
+   * Inner memory reset procedure.
+   *
+   * During the work with a robot, the brain could accumulate some inner memory
+   * about the current environment, e.g. global map of the current labyrinth.
+   * After the action, that leads to the desired state,
+   * the robot generates `Reset` message instead of new `Input`, that leads to `reset` call.
+   * The `reset` call cleans up all data specific for the current robot.
+   *
+   * Right after resetting brain must be ready for work with new robot.
+   *
+   * @param state current state.
+   * @return new clean state.
+   */
   def reset(state: StateT): Future[StateT]
 
+  /**
+   * Saves current state into [[geneticmachine.ubf.UnifiedBrainFormat]].
+   * @param state current state.
+   * @return serialazed state.
+   */
   def serialize(state: StateT): Future[UnifiedBrainFormat]
 
   def serialize_(state: StateT, requester: ActorRef) {
@@ -55,15 +126,15 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
     }
   }
 
-  def initialized(state: StateT): Receive = {
-    case Brain.Input(input: InputT) =>
-      val out = process(state, input)
+  def process(state: StateT): Receive = {
+    case Brain.Input(inData: InputT) =>
+      val out = input(state, inData)
       val requester = context.sender()
 
       out.onSuccess {
         case (newState, output) =>
           requester ! Brain.Output(output)
-          context.become(initialized(newState), discardOld = true)
+          context.become(process(newState), discardOld = true)
       }
 
       out.onFailure {
@@ -77,7 +148,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
 
       out.onSuccess {
         case newState: StateT =>
-          context.become(initialized(newState), discardOld = true)
+          context.become(process(newState), discardOld = true)
           requester ! MP.Ready
       }
 
@@ -92,7 +163,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
 
       resetting.onSuccess {
         case newState: StateT =>
-          context.become(initialized(newState), discardOld = true)
+          context.become(process(newState), discardOld = true)
           requester ! MP.Ready
           context.parent ! MP.Ready
       }
@@ -106,5 +177,8 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
       serialize_(state, context.sender())
   }
 
-  final def receive: Receive =  uninitialized
+  final val receive: Receive = {
+    val initialState = init(ubf)
+    process(initialState)
+  }
 }

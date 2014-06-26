@@ -1,16 +1,10 @@
-package test.ubf.drivers
+package test.db.drivers
 
+import geneticmachine.db.drivers.Neo4JDriver
+import org.scalatest._
 import test._
 
-import org.scalatest._
-
-import geneticmachine.ubf.drivers.Neo4JDriver
-import scala.concurrent.ExecutionContext.Implicits.global
-
-import org.neo4j.graphdb._
-
 import scala.collection.JavaConversions._
-
 import scala.util._
 
 class Neo4JPerformanceTest(val driver: Neo4JDriver) extends FlatSpec with Matchers with BeforeAndAfterAll {
@@ -21,6 +15,7 @@ class Neo4JPerformanceTest(val driver: Neo4JDriver) extends FlatSpec with Matche
 
   override def afterAll() {
     driver.shutdown()
+    cleanDirectory("./test-db")
   }
 
   behavior of "Neo4J driver"

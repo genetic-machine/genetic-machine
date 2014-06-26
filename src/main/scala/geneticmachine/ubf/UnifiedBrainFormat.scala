@@ -1,7 +1,5 @@
 package geneticmachine.ubf
 
-import scala.concurrent.Future
-
 import scala.collection.mutable
 
 object UnifiedBrainFormat {
@@ -166,9 +164,4 @@ final case class UnifiedBrainFormatBuilder(brainType: String, parentID: Long) {
 
     UnifiedBrainFormat(brainType, parentID, nodeSeq, inputNodeId, outputNodeId)
   }
-}
-
-abstract class UnifiedBrainFormatDriver(val dbPath: String) {
-  def save(ubf: UnifiedBrainFormat): Future[Long]
-  def load(id: Long): Future[UnifiedBrainFormat]
 }

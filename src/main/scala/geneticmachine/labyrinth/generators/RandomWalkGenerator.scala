@@ -1,6 +1,5 @@
 package geneticmachine.labyrinth.generators
 
-import geneticmachine.labyrinth.Direction._
 import geneticmachine.labyrinth._
 
 import scala.util.Random

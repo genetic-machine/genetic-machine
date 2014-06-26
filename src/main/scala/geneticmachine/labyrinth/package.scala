@@ -3,7 +3,6 @@ package geneticmachine
 import breeze.linalg.DenseMatrix
 import scala.math._
 import scala.Ordering
-import scala.util.Random
 
 package object labyrinth {
 
@@ -29,7 +28,7 @@ package object labyrinth {
   type CostMap = DenseMatrix[Int]
 
   /**
-   * It is not a complex value, it is 2D vector.
+   * It is not a complex value, it represents 2D vector.
    * 10x faster creation than through Vector[Int]
    */
   final case class Point(x: Int, y: Int) {
@@ -54,6 +53,7 @@ package object labyrinth {
 
     def turnRight: Point = Point(y, -x)
 
+    /** But it is the complex multiplication, i.e. rotation. **/
     def *(other: Point) = Point(this.x * other.x - this.y * other.y,
       this.y * other.x + this.x * other.y)
 
@@ -62,7 +62,7 @@ package object labyrinth {
     def max(other: Point) = Point(this.x max other.x, this.y max other.y)
     def min(other: Point) = Point(this.x min other.x, this.y min other.y)
 
-    /** It isn't the complex division! **/
+    /** It isn't the complex division, but rotation in the direction opposite to `other`! **/
     def /(other: Point) = this * other.adjoint
 
     def adjoint: Point = Point(x, -y)
