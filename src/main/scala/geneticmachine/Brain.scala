@@ -1,7 +1,7 @@
 package geneticmachine
 
 import akka.actor.{ActorLogging, ActorRef, Actor}
-import geneticmachine.ubf.UnifiedBrainFormat
+import geneticmachine.dataflow.DataFlowFormat
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
@@ -17,9 +17,6 @@ object Brain {
   case class Feedback[FeedbackT : ClassTag](data: FeedbackT) extends Request
 
   case object Reset extends Request
-
-  case object Serialize extends Request
-  case class Serialized(ubf: UnifiedBrainFormat) extends Response
 }
 
 /**
@@ -48,28 +45,28 @@ object Brain {
  *   ...
  *
  *   parent -Serialize-> brain
- *   brain ~serialize()~> Serialized(ubf) -> parent
+ *   brain ~serialize()~> Serialized(dff) -> parent
  *   stop or continue
  * }}}
  *
- * @param ubf description of the initial brain structure.
+ * @param dff description of the initial brain structure.
  * @tparam InputT type of input messages.
  * @tparam OutputT type of output messages.
  * @tparam FeedbackT type of feedback messages
  * @tparam StateT type of inner state.
  */
 abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
-                     FeedbackT : ClassTag, StateT : ClassTag](ubf: UnifiedBrainFormat)
+                     FeedbackT : ClassTag, StateT : ClassTag](dff: DataFlowFormat)
   extends Actor with ActorLogging {
 
   import context.dispatcher
 
   /**
-   * Returns initial state of actor by provided UBF description.
+   * Returns initial state of actor by provided DFF description.
    * Brain must be able to handle Input requests right after the initialization.
    * Not in future just for convinience of not handling the race during deferred initialization.
    */
-  def init(ubf: UnifiedBrainFormat): StateT
+  def init(dff: DataFlowFormat): StateT
 
   /**
    * Processes input data.
@@ -106,18 +103,18 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
   def reset(state: StateT): Future[StateT]
 
   /**
-   * Saves current state into [[geneticmachine.ubf.UnifiedBrainFormat]].
+   * Saves current state into [[geneticmachine.dataflow.DataFlowFormat]].
    * @param state current state.
    * @return serialazed state.
    */
-  def serialize(state: StateT): Future[UnifiedBrainFormat]
+  def serialize(state: StateT): Future[DataFlowFormat]
 
   def serialize_(state: StateT, requester: ActorRef) {
     val serialization = serialize(state)
 
     serialization.onSuccess {
-      case ubf: UnifiedBrainFormat =>
-        requester ! Brain.Serialized(ubf)
+      case dff: DataFlowFormat =>
+        requester ! MP.Serialized(dff)
     }
 
     serialization.onFailure {
@@ -173,12 +170,12 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
           requester ! MP.Fail(e)
       }
 
-    case Brain.Serialize =>
+    case MP.Serialize =>
       serialize_(state, context.sender())
   }
 
   final val receive: Receive = {
-    val initialState = init(ubf)
+    val initialState = init(dff)
     process(initialState)
   }
 }

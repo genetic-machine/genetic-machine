@@ -3,7 +3,7 @@ package geneticmachine.db
 import akka.actor.{Actor, ActorLogging}
 import common.{MessageProtocol => MP}
 import geneticmachine.db.drivers.DBDriver
-import geneticmachine.ubf._
+import geneticmachine.dataflow._
 
 import scala.concurrent.Future
 
@@ -11,9 +11,9 @@ object DBActor {
   import common.MessageProtocol._
 
   case class Load(brainId: Long) extends Request
-  case class Save(ubf: UnifiedBrainFormat) extends Request
+  case class Save(dff: DataFlowFormat) extends Request
 
-  case class Loaded(ubf: UnifiedBrainFormat) extends Response
+  case class Loaded(dff: DataFlowFormat) extends Response
   case class Saved(brainId: Long) extends Response
 }
 
@@ -26,9 +26,9 @@ abstract class DBActor[D <: DBDriver]
   val driver: D
 
   final def receive: Receive = {
-    case Save(ubf) =>
+    case Save(dff) =>
       val requester = context.sender()
-      val request = Future { driver.saveBrain(ubf) }
+      val request = Future { driver.save(dff) }
 
       request.onSuccess {
         case id: Long =>
@@ -43,11 +43,11 @@ abstract class DBActor[D <: DBDriver]
 
     case Load(id: Long) =>
       val requester = context.sender()
-      val request = Future { driver.loadBrain(id) }
+      val request = Future { driver.load(id) }
 
       request.onSuccess {
-        case ubf =>
-          requester ! Loaded(ubf)
+        case dff =>
+          requester ! Loaded(dff)
       }
 
       request.onFailure {

@@ -1,7 +1,7 @@
 package test.db.drivers
 
 import geneticmachine.db.drivers.PickleDriver
-import geneticmachine.ubf.UnifiedBrainFormat
+import geneticmachine.dataflow.DataFlowFormat
 import org.scalatest._
 import test._
 
@@ -17,16 +17,16 @@ class PickleDriverTest(val driver: PickleDriver) extends FlatSpec with Matchers 
     cleanDirectory("./test-pickle-driver/")
   }
 
-  val ubf = UnifiedBrainFormat.sample(0)
+  val dff = DataFlowFormat.sample(0)
 
   behavior of "Pickle Driver"
 
-  it must "save and load ubf properly" in {
-    println(ubf)
-    val id = driver.saveBrain(ubf)
+  it must "save and load dff properly" in {
+    println(dff)
+    val id = driver.save(dff)
     println(s"Brain Id: $id")
 
-    val loaded = driver.loadBrain(id)
+    val loaded = driver.load(id)
 
     val number = 100
 
@@ -34,7 +34,7 @@ class PickleDriverTest(val driver: PickleDriver) extends FlatSpec with Matchers 
       for {
         _ <- 0 until number
       } {
-        driver.loadBrain(id)
+        driver.load(id)
       }
     }
 
@@ -42,7 +42,7 @@ class PickleDriverTest(val driver: PickleDriver) extends FlatSpec with Matchers 
       for {
         _ <- 0 until number
       } {
-        driver.saveBrain(ubf)
+        driver.save(dff)
       }
     }
 
@@ -57,7 +57,7 @@ class PickleDriverTest(val driver: PickleDriver) extends FlatSpec with Matchers 
     val saving = Future.sequence {
       for {
         _ <- 0 until number
-      } yield  Future { driver.saveBrain(ubf) }
+      } yield  Future { driver.save(dff) }
     }
 
     val ids = Await.result(saving, (number / 10).second)

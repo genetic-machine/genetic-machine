@@ -1,7 +1,7 @@
 package test.db.drivers
 
 import geneticmachine.db.drivers._
-import geneticmachine.ubf.UnifiedBrainFormat
+import geneticmachine.dataflow.DataFlowFormat
 import org.scalatest._
 import test._
 
@@ -18,28 +18,40 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
     cleanDirectory("./test-db-driver")
   }
 
-  val ubf = UnifiedBrainFormat.sample(10)
+  val dff = DataFlowFormat.sample
 
   behavior of "Neo4JDriver"
 
-  it must "save and load ubf properly" in {
-    println(ubf)
-    val id = driver.saveBrain(ubf)
+  it must "save and load dff properly" in {
+    println(dff)
+    val id = driver.save(dff)
     println(s"Brain Id: $id")
-    val loaded = driver.loadBrain(id)
+    val loaded = driver.load(id)
     println(loaded)
+    assert(dff.nodes.size == loaded.nodes.size)
+
+    def edgesCount(d: DataFlowFormat): Int = {
+      (for {
+        node <- d.nodes
+        portConnections <- node.edges
+      } yield portConnections.size).sum
+    }
+
+    assert(edgesCount(dff) == edgesCount(loaded))
+
   }
 
   it must "be concurrent" in {
     val (t, _) = timed {
       val requests = for {
         _ <- 0 until 100
-      } yield Future { driver.saveBrain(ubf) }
+      } yield Future { driver.save(dff) }
 
       val metaRequest = Future.sequence(requests)
       Await.result(metaRequest, 10.second)
     }
 
-    println(s"Time: $t")
+    println(s"Time: ${t.toDouble / 100} millisec per brain")
   }
 }
+

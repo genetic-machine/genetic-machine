@@ -1,10 +1,10 @@
 package geneticmachine.db.drivers
 
-import geneticmachine.ubf._
+import geneticmachine.dataflow._
 
 trait DBDriver {
-  def saveBrain(ubf: UnifiedBrainFormat): Long
-  def loadBrain(id: Long): UnifiedBrainFormat
+  def save(flow: DataFlowFormat): Long
+  def load(id: Long): DataFlowFormat
 
   def shutdown(): Unit
 }

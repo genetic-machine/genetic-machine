@@ -1,7 +1,7 @@
 package geneticmachine.db.drivers
 
-import geneticmachine.ubf._
-import geneticmachine.ubf.UnifiedBrainFormat._
+import geneticmachine.dataflow._
+import geneticmachine.dataflow.DataFlowFormat._
 
 import java.io._
 
@@ -10,16 +10,16 @@ import binary._
 
 object PickleDriver {
 
-  object PickleUBF {
-    def unapply(pubf: PickleUBF): Option[UnifiedBrainFormat] = {
-      Some(UnifiedBrainFormat(pubf.brainType, pubf.parentId, pubf.nodes.toVector, pubf.inputNodeId, pubf.outputNodeId))
+  object PickleDFF {
+    def unapply(flow: PickleDFF): Option[DataFlowFormat] = {
+      Some(DataFlowFormat(flow.props, flow.relations, flow.nodes.toVector, flow.inputNodeId, flow.outputNodeId))
     }
 
-    def apply(ubf: UnifiedBrainFormat) = new PickleUBF(ubf.brainType, ubf.parentID, ubf.nodes.toList, ubf.inputNodeId, ubf.outputNodeId)
+    def apply(dff: DataFlowFormat) = new PickleDFF(dff.props, dff.relations, dff.nodes.toList, dff.inputNodeId, dff.outputNodeId)
   }
 
   /** Pickler doesn't work with Vector[Node], but do work with List */
-  final class PickleUBF(val brainType: String, val parentId: Long, val nodes: List[Node], val inputNodeId: Int, val outputNodeId: Int) {
+  final class PickleDFF(val props: Map[String, Any], val relations: Set[(String, Long)], val nodes: List[Node], val inputNodeId: Int, val outputNodeId: Int) {
   }
 }
 
@@ -46,14 +46,14 @@ class PickleDriver(val dbPath: String) extends DBDriver {
     if (ids.size > 0) ids.max + 1 else 0
   }
 
-  override def saveBrain(ubf: UnifiedBrainFormat): Long = {
+  override def save(flow: DataFlowFormat): Long = {
     val brainID = this.synchronized {
       val index = lastIndex
       lastIndex += 1
       index
     }
 
-    val pickled = PickleUBF(ubf).pickle
+    val pickled = PickleDFF(flow).pickle
     val file = new File(dbDir, getFileName(brainID))
     val fw = new FileOutputStream(file)
     fw.write(pickled.value)
@@ -62,14 +62,14 @@ class PickleDriver(val dbPath: String) extends DBDriver {
     brainID
   }
 
-  override def loadBrain(brainId: Long): UnifiedBrainFormat = {
+  override def load(brainId: Long): DataFlowFormat = {
     val file = new File(dbDir, getFileName(brainId))
     val fr = new FileInputStream(file)
     val pickled = new Array[Byte](fr.available())
     fr.read(pickled)
-    val PickleUBF(ubf) = BinaryPickle(pickled).unpickle[PickleUBF]
+    val PickleDFF(dff) = BinaryPickle(pickled).unpickle[PickleDFF]
 
-    ubf
+    dff
   }
 
   override def shutdown(): Unit = ()

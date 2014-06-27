@@ -2,6 +2,7 @@ package geneticmachine.labyrinth
 
 import geneticmachine.Robot
 import akka.actor.ActorRef
+import geneticmachine.dataflow.DataFlowFormat
 import scala.concurrent.Future
 import geneticmachine.labyrinth.vision._
 import geneticmachine.labyrinth.generators._
@@ -47,5 +48,9 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator, val 
     (newStatus, if (newPosition == status.goal) None else Some(newInput))
   }
 
-  def scoreOutput(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future { LabyrinthScore(0.0) }
+  override def scoreOutput(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future { LabyrinthScore(0.0) }
+
+  override def serialize(status: LabyrinthStatus): Future[DataFlowFormat] = Future.successful {
+    DataFlowFormat.empty("ROBOT", "LabyrinthInput", "LabyrinthOutput")
+  }
 }

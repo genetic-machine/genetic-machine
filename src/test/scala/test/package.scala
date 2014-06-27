@@ -1,6 +1,10 @@
 import java.io._
 
+import org.scalatest._
+
 package object test {
+
+  object SlowTest extends Tag("geneticmachine.test.tags.SlowTest")
 
   def cleanDirectory(dir: String): Boolean = cleanDirectory(new File(dir))
 

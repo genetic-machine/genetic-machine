@@ -2,13 +2,13 @@ package geneticmachine.labyrinth
 
 import geneticmachine.Brain
 import LabyrinthCommand.LabyrinthCommand
-import geneticmachine.ubf.UnifiedBrainFormat
+import geneticmachine.dataflow.DataFlowFormat
 
 import scala.concurrent.Future
 
 object DijkstraBrain {
-  def serialization: UnifiedBrainFormat = {
-    UnifiedBrainFormat.empty("DijkstraBrain", "LabyrinthInput", "LabyrinthOutput", -1)
+  def serialization: DataFlowFormat = {
+    DataFlowFormat.empty("DijkstraBrain", "LabyrinthInput", "LabyrinthOutput")
   }
 }
 
@@ -19,7 +19,7 @@ class DijkstraBrain
 
   override def serialize(state: Integer) = Future.successful(DijkstraBrain.serialization)
 
-  override def init(ubf: UnifiedBrainFormat): Integer = 0
+  override def init(dff: DataFlowFormat): Integer = 0
 
   override def input(stepCounter: Integer, data: LabyrinthInput): Future[(Integer, LabyrinthCommand)] = Future {
     val (command, _) = strictMinPathSensor(data).max(Ordering by { x: (LabyrinthCommand.LabyrinthCommand, Double) => x._2 })

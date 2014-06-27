@@ -2,6 +2,7 @@ package geneticmachine
 
 import akka.actor.{ ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
+import geneticmachine.dataflow.DataFlowFormat
 import scala.util.{Failure, Success}
 import common.MessageProtocol
 import scala.concurrent.Future
@@ -69,6 +70,8 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    */
   def scoreOutput(status: StatusT, brainOutput: OutputT): Future[ActuatorResponseT]
 
+  def serialize(status: StatusT): Future[DataFlowFormat]
+
   final def waitBrain(status: StatusT, brainResponse: OutputT): Receive = {
     case MessageProtocol.Ready if sender() == brain =>
       val state = processOutput(status, brainResponse)
@@ -79,6 +82,8 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
           brain ! Brain.Input (inputData)
 
         case (newStatus: StatusT, None) =>
+          context.become(finish(newStatus))
+
           (brain ? Brain.Reset).onComplete {
             case Success(MessageProtocol.Ready) =>
               context.parent ! Robot.Finish(brain, newStatus)
@@ -124,6 +129,22 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
 
     case msg if sender() == brain =>
       unexpectedResponse(s"must be ${classOf[Brain.Output[OutputT]]}", msg)
+  }
+
+  final def finish(status: StatusT): Receive = {
+    case MessageProtocol.Serialize =>
+      val requester = context.sender()
+      val serialization = serialize(status)
+
+      serialization.onSuccess {
+        case dff =>
+          requester ! MessageProtocol.Serialized(dff)
+      }
+
+      serialization.onFailure {
+        case e: Throwable =>
+          requester ! MessageProtocol.Fail(e)
+      }
   }
 
   final val receive: Receive = {

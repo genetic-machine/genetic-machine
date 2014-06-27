@@ -1,5 +1,7 @@
 package common
 
+import geneticmachine.dataflow.DataFlowFormat
+
 object MessageProtocol {
   abstract class Request
   abstract class Response
@@ -12,4 +14,7 @@ object MessageProtocol {
 
   case class UnexpectedResponse(reason: String, msg: Any) extends Throwable(reason)
   case class InitializationFailure(e: Throwable) extends Throwable(e)
+
+  case object Serialize extends Request
+  case class Serialized(dff: DataFlowFormat) extends Response
 }

@@ -1,8 +1,10 @@
 package geneticmachine.db.drivers
 
-import geneticmachine.ubf.UnifiedBrainFormatBuilder.NodeRef
-import geneticmachine.ubf.{UnifiedBrainFormat => UBF, UnifiedBrainFormatBuilder}
-import geneticmachine.ubf.UnifiedBrainFormat.{ Node => UBFNode, Port}
+import geneticmachine.dataflow.DataFlowFormatBuilder.NodeRef
+import geneticmachine.dataflow.{DataFlowFormat => DFF, DataFlowFormatBuilder}
+
+import geneticmachine.dataflow.DataFlowFormat._
+import geneticmachine.dataflow.DataFlowFormat.{ Node => DFFNode}
 
 import org.neo4j.graphdb._
 import org.neo4j.graphdb.factory.GraphDatabaseFactory
@@ -14,15 +16,12 @@ import scala.collection.JavaConversions._
 
 object Neo4JDriver {
 
-  val connected = DynamicRelationshipType.withName("CONNECT")
+  val connected = DynamicRelationshipType.withName("CONNECTED")
   val write = DynamicRelationshipType.withName("WRITE")
   val read = DynamicRelationshipType.withName("READ")
-  val inherit = DynamicRelationshipType.withName("INHERIT")
 
-  val brainLabel = DynamicLabel.label("BRAIN")
-  val nodeLabel = DynamicLabel.label("NODE")
-  val inputLabel = DynamicLabel.label("INPUT")
-  val outputLabel = DynamicLabel.label("OUTPUT")
+  val portFromProp = "$portFrom"
+  val portToProp = "$portTo"
 }
 
 final class Neo4JDriver(val dbPath: String) extends DBDriver {
@@ -37,19 +36,21 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
 
   def shutdown() = { shutdownHook.remove(); graphDB.shutdown() }
 
-  def createNode(ubfNode: UBFNode, label: Label): NeoNode = {
-    val neoNode = graphDB.createNode(label)
-
+  def createNode(props: Map[String, Any]): NeoNode = {
+    val label = props.getOrElse(labelProp, nodeLabel).asInstanceOf[String]
+    val neoNode = graphDB.createNode(DynamicLabel.label(label))
     for {
-      (k, v) <- ubfNode.props
+      (k, v) <- props
     } {
       neoNode.setProperty(k, v)
     }
 
-    neoNode.setProperty("$inputs", ubfNode.inputs)
-    neoNode.setProperty("$outputs", ubfNode.outputs)
-
     neoNode
+  }
+
+  def createNode(dffNode: DFFNode): NeoNode = {
+    val props = dffNode.props.updated(inputsProp, dffNode.inputs).updated(outputsProp, dffNode.outputs)
+    createNode(props)
   }
 
   def withTx[T](body: => T): T = {
@@ -70,66 +71,55 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
     result.get
   }
 
-  override def saveBrain(ubf: UBF): Long = withTx {
+  override def save(dff: DFF): Long = withTx {
+    val mainNode = createNode(dff.props)
 
-    val brainNode = graphDB.createNode(brainLabel)
-    brainNode.setProperty("$type", ubf.brainType)
-
-    def getLabel(id: Int): Label = id match {
-      case ubf.inputNodeId => inputLabel
-      case ubf.outputNodeId => outputLabel
-      case _ => nodeLabel
-    }
-
-    val ubfIdToNeoNode = (for {
-      (ubfNode, ubfId) <- ubf.nodes.zipWithIndex
-      label = getLabel(ubfId)
-      neoNode = createNode(ubfNode, label)
-    } yield (ubfId, neoNode)).toMap
+    val dffIdToNeoNode = (for {
+      (dffNode, dffId) <- dff.nodes.zipWithIndex
+      neoNode = createNode(dffNode)
+    } yield (dffId, neoNode)).toMap
 
     for {
-      (ubfNodeId, neoNode) <- ubfIdToNeoNode
-      (outs, port) <- ubf.node(ubfNodeId).edges.zipWithIndex
+      (dffNodeId, neoNode) <- dffIdToNeoNode
+      (outs, port) <- dff.node(dffNodeId).edges.zipWithIndex
       Port(outNode, outPort) <- outs
     } {
-      val outNeoNode = ubfIdToNeoNode(outNode)
+      val outNeoNode = dffIdToNeoNode(outNode)
       val r = neoNode.createRelationshipTo(outNeoNode, connected)
-      r.setProperty("$portFrom", port)
-      r.setProperty("$portTo", outPort)
+      r.setProperty(portFromProp, port)
+      r.setProperty(portToProp, outPort)
     }
 
-    val inputNode = ubfIdToNeoNode(ubf.inputNodeId)
-    val outputNode = ubfIdToNeoNode(ubf.outputNodeId)
+    val inputNode = dffIdToNeoNode(dff.inputNodeId)
+    val outputNode = dffIdToNeoNode(dff.outputNodeId)
 
-    brainNode.createRelationshipTo(inputNode, write)
-    brainNode.createRelationshipTo(outputNode, read)
+    mainNode.createRelationshipTo(inputNode, write)
+    mainNode.createRelationshipTo(outputNode, read)
 
-    Try {
-      val parentNode = graphDB.getNodeById(ubf.parentID)
-      brainNode.createRelationshipTo(parentNode, inherit)
+    for {
+      (relationType, id) <- dff.relations
+    } {
+      val endNode = graphDB.getNodeById(id)
+      mainNode.createRelationshipTo(endNode, DynamicRelationshipType.withName(relationType))
     }
 
-    brainNode.getId
-  }
-
-  private def getType(node: NeoNode): String = {
-    node.getProperty("$type").asInstanceOf[String]
+    mainNode.getId
   }
 
   private def getInputsOutputs(node: NeoNode): (Int, Int) = {
-    val ins = node.getProperty("$inputs").asInstanceOf[Int]
-    val outs = node.getProperty("$outputs").asInstanceOf[Int]
+    val ins = node.getProperty(inputsProp).asInstanceOf[Int]
+    val outs = node.getProperty(outputsProp).asInstanceOf[Int]
     (ins, outs)
   }
 
   private def getPorts(rel: Relationship): (Int, Int) = {
-    val portFrom = rel.getProperty("$portFrom").asInstanceOf[Int]
-    val portTo = rel.getProperty("$portTo").asInstanceOf[Int]
+    val portFrom = rel.getProperty(portFromProp).asInstanceOf[Int]
+    val portTo = rel.getProperty(portToProp).asInstanceOf[Int]
     (portFrom, portTo)
   }
 
-  override def loadBrain(id: Long): UBF = withTx {
-    val brain = graphDB.getNodeById(id)
+  override def load(id: Long): DFF = withTx {
+    val mainNode = graphDB.getNodeById(id)
 
     def getOnlyConnectedNode(node: NeoNode, rel: RelationshipType): NeoNode = {
       val rels = node.getRelationships(Direction.OUTGOING, rel).toList
@@ -140,8 +130,15 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
       rels(0).getEndNode
     }
 
-    val inputNode = getOnlyConnectedNode(brain, write)
-    val outputNode = getOnlyConnectedNode(brain, read)
+    def getNonReadWriteRelationships(node: NeoNode): Map[String, Long] = {
+      (for {
+        rel <- node.getRelationships(Direction.OUTGOING)
+        if !rel.isType(write) && !rel.isType(read)
+      } yield (rel.getType.name(), rel.getEndNode.getId)).toMap
+    }
+
+    val inputNode = getOnlyConnectedNode(mainNode, write)
+    val outputNode = getOnlyConnectedNode(mainNode, read)
 
     def traverse(open: Set[NeoNode], closed: Set[NeoNode]): Set[NeoNode] = {
       val wave = for {
@@ -160,23 +157,15 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
 
     val neoNodes = traverse(Set(inputNode), Set.empty)
 
-    val parentId: Long = {
-      val parents = brain.getRelationships(Direction.OUTGOING, inherit).toList
-      if (parents.size > 0) {
-        parents(0).getEndNode.getId
-      } else {
-        -1
-      }
-    }
+    val dffBuilder = DataFlowFormatBuilder(mainNode.getLabels.toList(0).name())
 
-    val ubfBuilder = UnifiedBrainFormatBuilder(getType(brain), parentId)
-
-    def createUBFNode(neoNode: NeoNode): NodeRef = {
+    def createDFFNode(neoNode: NeoNode): NodeRef = {
       val (inputs, outputs) = getInputsOutputs(neoNode)
-      val ref = ubfBuilder.node(getType(neoNode), inputs, outputs)
+      val ref = dffBuilder.node(inputs, outputs)
 
-      val propKeys = neoNode.getPropertyKeys.toSet.filter { k => !k.startsWith("$") }
-      val props = for {
+      val propKeys = neoNode.getPropertyKeys.toSet -- Set(inputsProp, outputsProp)
+
+      for {
         key <- propKeys
         value = neoNode.getProperty(key)
       } {
@@ -186,20 +175,20 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
       ref
     }
 
-    val neoToUbf = (for {
+    val neoToDff = (for {
       neoNode <- neoNodes
-      ubfNode = createUBFNode(neoNode)
-    } yield (neoNode, ubfNode)).toMap
+      dffNode = createDFFNode(neoNode)
+    } yield (neoNode, dffNode)).toMap
 
     for {
-      (neoNode, startUbfNode) <- neoToUbf
+      (neoNode, startDffNode) <- neoToDff
       rel <- neoNode.getRelationships(Direction.OUTGOING, connected).toList
-      endUbfNode = neoToUbf(rel.getEndNode)
+      endDffNode = neoToDff(rel.getEndNode)
       (portFrom, portTo) = getPorts(rel)
     } {
-      startUbfNode(portFrom) --> endUbfNode(portTo)
+      startDffNode(portFrom) --> endDffNode(portTo)
     }
 
-    ubfBuilder.toUBF(neoToUbf(inputNode), neoToUbf(outputNode))
+    dffBuilder.withInput(neoToDff(inputNode)).withOutput(neoToDff(outputNode)).toDataFlowFormat
   }
 }
