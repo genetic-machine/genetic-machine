@@ -2,11 +2,15 @@ package geneticmachine.dataflow
 
 object DataFlowFormat {
 
+  val brainLabel = "BRAIN"
+  val robotLabel = "ROBOT"
+
   val inputLabel = "INPUT"
   val outputLabel = "OUTPUT"
   val nodeLabel = "NODE"
 
   val parentRelation = "INHERIT"
+  val experimentRelation = "EXAMINES"
 
   val typeProp = "$type"
   val labelProp = "$label"

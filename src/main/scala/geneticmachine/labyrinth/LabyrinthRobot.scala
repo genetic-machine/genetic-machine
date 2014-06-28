@@ -1,13 +1,26 @@
 package geneticmachine.labyrinth
 
 import geneticmachine.Robot
-import akka.actor.ActorRef
-import geneticmachine.dataflow.DataFlowFormat
+
+import akka.actor.{Props, ActorRef}
+
+import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
+import geneticmachine.dataflow.DataFlowFormat._
+
 import scala.concurrent.Future
 import geneticmachine.labyrinth.vision._
 import geneticmachine.labyrinth.generators._
+import geneticmachine.labyrinth.feedback._
 
-class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator, val vision: Vision)
+object LabyrinthRobot {
+  def sampleProps(brain: ActorRef): Props = {
+    Props(classOf[LabyrinthRobot], brain,
+      RandomWalkGenerator(3, 3)(Point(31, 31)), SimpleVision(5), ZeroFeedback)
+  }
+}
+
+class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
+                     val vision: Vision, val feedbackStrategy: FeedbackStrategy)
   extends Robot[LabyrinthInput, LabyrinthStatus, LabyrinthCommand.LabyrinthCommand, LabyrinthScore](brain) {
 
   import context.dispatcher
@@ -48,9 +61,36 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator, val 
     (newStatus, if (newPosition == status.goal) None else Some(newInput))
   }
 
-  override def scoreOutput(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future { LabyrinthScore(0.0) }
+  override def scoreOutput(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
+    feedbackStrategy(status, brainOutput)
+  }
 
   override def serialize(status: LabyrinthStatus): Future[DataFlowFormat] = Future.successful {
-    DataFlowFormat.empty("ROBOT", "LabyrinthInput", "LabyrinthOutput")
+    val builder = DataFlowFormatBuilder(robotLabel)
+
+    val input = builder.node("RobotInput").asInput()
+    val output = builder.node("BrainScore").asOutput()
+
+    val labGenNode = builder.node("Labyrinth generator")("method" -> labyrinthGen.toString())
+    val visionNode = builder.node("Vision")("method" -> vision.toString())
+    val robotNode = builder.node("RobotRef", 2, 1)
+    val physicsNode = builder.node("Labyrinth Physics", 2, 2)
+
+    val reinforcementLearningNode = builder.node("Reinforcement Learning")("method" -> feedbackStrategy.toString)
+
+    input --> labGenNode
+    labGenNode --> physicsNode(1)
+
+    physicsNode(0) --> visionNode
+    visionNode --> robotNode(0)
+    robotNode --> reinforcementLearningNode
+    reinforcementLearningNode --> robotNode(1)
+
+    robotNode --> physicsNode(0)
+    visionNode --> robotNode(0)
+
+    physicsNode(1) --> output
+
+    builder.toDataFlowFormat
   }
 }

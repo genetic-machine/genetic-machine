@@ -62,6 +62,10 @@ class PickleDriver(val dbPath: String) extends DBDriver {
     brainID
   }
 
+  def idInjection(dff: DataFlowFormat, brainId: Long): DataFlowFormat = {
+    dff.copy(props = dff.props + ("$id" -> brainId))
+  }
+
   override def load(brainId: Long): DataFlowFormat = {
     val file = new File(dbDir, getFileName(brainId))
     val fr = new FileInputStream(file)
@@ -69,7 +73,7 @@ class PickleDriver(val dbPath: String) extends DBDriver {
     fr.read(pickled)
     val PickleDFF(dff) = BinaryPickle(pickled).unpickle[PickleDFF]
 
-    dff
+    idInjection(dff, brainId)
   }
 
   override def shutdown(): Unit = ()

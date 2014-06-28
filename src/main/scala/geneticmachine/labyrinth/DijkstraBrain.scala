@@ -2,22 +2,44 @@ package geneticmachine.labyrinth
 
 import geneticmachine.Brain
 import LabyrinthCommand.LabyrinthCommand
-import geneticmachine.dataflow.DataFlowFormat
+import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
+import geneticmachine.dataflow.DataFlowFormat._
 
 import scala.concurrent.Future
+import scala.util.Try
 
 object DijkstraBrain {
-  def serialization: DataFlowFormat = {
-    DataFlowFormat.empty("DijkstraBrain", "LabyrinthInput", "LabyrinthOutput")
+  def serialization(parentID: Option[Long] = None): DataFlowFormat = {
+    val builder = DataFlowFormatBuilder(brainLabel)
+    val inputNode = builder.node("LabyrinthInput").asInput()
+    val outputNode = builder.node("LabyrinthOutput").asOutput()
+    val aiNode = builder.node("Strict AI")("method" -> "Dijkstra algorithm mod. 2")
+
+    inputNode --> aiNode
+    aiNode --> outputNode
+
+    for {
+      id <- parentID
+    } {
+      builder(parentRelation) --> id
+    }
+
+    builder.toDataFlowFormat
   }
 }
 
-class DijkstraBrain
-  extends Brain[LabyrinthInput, LabyrinthCommand, LabyrinthScore, Integer](DijkstraBrain.serialization) {
+class DijkstraBrain(dff: DataFlowFormat)
+  extends Brain[LabyrinthInput, LabyrinthCommand, LabyrinthScore, Integer](dff) {
 
   import context.dispatcher
 
-  override def serialize(state: Integer) = Future.successful(DijkstraBrain.serialization)
+  override def serialize(state: Integer) = Future.successful {
+    val parentID = Try {
+      dff.props("$id").asInstanceOf[Long]
+    }.toOption
+
+    DijkstraBrain.serialization(parentID)
+  }
 
   override def init(dff: DataFlowFormat): Integer = 0
 

@@ -16,9 +16,13 @@ object DataFlowFormatBuilder {
     }
   }
 
-  final case class PortRef(port: PortBuilder, parent: DataFlowFormatBuilder) {
+  case class PortRef(port: PortBuilder, parent: DataFlowFormatBuilder) {
     def -->(other: PortRef) {
       parent.addEdge(port.nodeId, port.portN, other.port)
+    }
+
+    def -->(other: NodeRef) {
+      this --> other(0)
     }
 
     def -/-(other: PortRef) {
@@ -38,7 +42,12 @@ object DataFlowFormatBuilder {
     }
   }
 
-  final case class NodeRef(nodeId: Long, parent: DataFlowFormatBuilder) {
+  object NodeRef {
+    def apply(nodeId: Long, parent: DataFlowFormatBuilder) = new NodeRef(nodeId, parent)
+  }
+
+  final class NodeRef(val nodeId: Long, parent: DataFlowFormatBuilder) extends PortRef(PortBuilder(nodeId, 0), parent) {
+
     def apply(port: Int): PortRef = {
       PortRef(PortBuilder(nodeId, port), parent)
     }

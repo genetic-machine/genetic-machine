@@ -189,6 +189,9 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
       startDffNode(portFrom) --> endDffNode(portTo)
     }
 
+    /** ID injection **/
+    dffBuilder("$id" -> id)
+
     dffBuilder.withInput(neoToDff(inputNode)).withOutput(neoToDff(outputNode)).toDataFlowFormat
   }
 }

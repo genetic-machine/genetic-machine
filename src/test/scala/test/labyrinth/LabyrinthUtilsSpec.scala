@@ -55,7 +55,7 @@ class LabyrinthUtilsSpec extends FlatSpec with Matchers {
 
   "SimpleLabyrinthGenerator" must "return a labyrinth with exit" in {
     val (rows, cols) = (1001, 1001)
-    val (lab, start, goal) = RandomWalkGenerator(3, 5)(rows, cols)()
+    val (lab, start, goal) = RandomWalkGenerator(3, 5)(Point(rows, cols))()
     val cost = costMap(lab, start)
 
     assert(cost(goal.x, goal.y) != Int.MaxValue)

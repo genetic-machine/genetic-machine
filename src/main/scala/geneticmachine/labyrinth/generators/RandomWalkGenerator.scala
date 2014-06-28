@@ -4,15 +4,13 @@ import geneticmachine.labyrinth._
 
 import scala.util.Random
 
-object RandomWalkGenerator {
-  def apply(lineLenDelta: Int, minLineLen: Int)(rows: Int, cols: Int) =
-    new RandomWalkGenerator(lineLenDelta, minLineLen)(rows, cols)
-}
+final case class RandomWalkGenerator(lineLenDelta: Int, minLineLen: Int)
+                                    (size: Point) extends LabyrinthGenerator {
 
-final class RandomWalkGenerator(val lineLenDelta: Int, val minLineLen: Int)
-                               (val rows: Int, val cols: Int) extends LabyrinthGenerator {
+  override def toString(): String = s"RandomWalkGenerator(line: $minLineLen - ${minLineLen + lineLenDelta}, size: $size)"
 
   def apply(): (Labyrinth, Point, Point) = {
+    val Point(rows, cols) = size
     val lab = Labyrinth.occupied(rows, cols)
 
     val start = Point(0, (cols - 1) / 2)
