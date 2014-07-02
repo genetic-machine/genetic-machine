@@ -5,8 +5,11 @@ import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain}
 import scala.collection.immutable.Queue
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+import scala.util.Try
 
 object Experiment {
+
+  type Result[S] = List[(Try[S], Try[Long])]
 
   final case class Using[I, O, F](brainFactory: BrainFactory[I, O, F]) {
     def startWith(id: Long) = new EmptyExperiment(brainFactory, Some(id))
@@ -16,8 +19,14 @@ object Experiment {
   def using[I, O, F](brainFactory: BrainFactory[I, O, F]) = Using[I, O, F](brainFactory)
 }
 
+import Experiment._
+
 trait ExperimentContext {
-  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[List[S]]
+  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[Result[S]]
+
+  def apply[S : ClassTag](ex: => Experiment[_, _, _, S]): Future[Result[S]] = {
+    executeExperiment(ex)
+  }
 }
 
 sealed abstract class Experiment[I, O, F, +S : ClassTag]
@@ -29,7 +38,7 @@ sealed abstract class Experiment[I, O, F, +S : ClassTag]
     new NonEmptyExperiment(brainFactory, startWith, cycles.enqueue(robotFactory))
   }
 
-  def execute()(implicit context: ExperimentContext): Future[List[S]] = {
+  def execute()(implicit context: ExperimentContext): Future[Result[S]] = {
     context.executeExperiment(this)
   }
 }

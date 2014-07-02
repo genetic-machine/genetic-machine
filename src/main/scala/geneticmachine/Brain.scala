@@ -71,11 +71,6 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
                      FeedbackT : ClassTag, StateT : ClassTag](val dff: DataFlowFormat)
   extends Actor with ActorLogging {
 
-  type IT = InputT
-  type OT = OutputT
-  type FT = FeedbackT
-  type InnerT = StateT
-
   import context.dispatcher
 
   /**

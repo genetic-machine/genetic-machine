@@ -38,9 +38,9 @@ class EvolutionTest(_system: ActorSystem) extends TestKit(_system)
 
       val eActor = _system.actorOf(Props(new ExperimentActor(experiment, dbActor)), "Experiment")
       Await.result(eActor.ask(MessageProtocol.Init)(60.seconds), 62.seconds) match {
-        case ExperimentActor.ExperimentResult(rs: List[Try[LabyrinthStatus]]) =>
+        case ExperimentActor.ExperimentResult(rs: List[(Try[LabyrinthStatus], Try[Long])]) =>
           println(s"Results:\n${rs.mkString("\n")}")
-          assert (rs.forall { r => r.isSuccess })
+          assert (rs.forall { (r) => r._1.isSuccess })
 
         case msg =>
           println(s"Strange response: $msg")
