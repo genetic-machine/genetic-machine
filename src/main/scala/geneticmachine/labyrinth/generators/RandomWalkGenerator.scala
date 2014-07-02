@@ -7,7 +7,8 @@ import scala.util.Random
 final case class RandomWalkGenerator(lineLenDelta: Int, minLineLen: Int)
                                     (size: Point) extends LabyrinthGenerator {
 
-  override def toString(): String = s"RandomWalkGenerator(line: $minLineLen - ${minLineLen + lineLenDelta}, size: $size)"
+  override def toString(): String = s"RandomWalkGenerator(line: $minLineLen - ${minLineLen + lineLenDelta}, " +
+    s"size: ${size.x}x${size.y})"
 
   def apply(): (Labyrinth, Point, Point) = {
     val Point(rows, cols) = size

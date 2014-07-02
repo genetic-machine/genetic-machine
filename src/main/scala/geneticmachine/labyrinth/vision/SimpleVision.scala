@@ -25,4 +25,6 @@ class SimpleVision(val deep: Int) extends Vision {
 
     Observation(visionMap, from)
   }
+
+  override def toString(): String = s"SimpleVision($deep)"
 }

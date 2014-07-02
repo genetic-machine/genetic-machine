@@ -16,6 +16,8 @@ object DataFlowFormat {
   val labelProp = "$label"
   val inputsProp = "$inputs"
   val outputsProp = "$outputs"
+  val idProp = "$id"
+  val errorCauseProp = "$cause"
 
   final case class Port(nodeId: Int, portN: Int)
 
@@ -39,6 +41,15 @@ object DataFlowFormat {
     val inputNode = flowBuilder.node(inputType).asInput()
     val outputNode = flowBuilder.node(outputType).asOutput()
     inputNode(0) --> outputNode(0)
+    flowBuilder.toDataFlowFormat
+  }
+
+  def errorDff(flowLabel: String, e: Throwable): DataFlowFormat = {
+    val flowBuilder = DataFlowFormatBuilder(flowLabel)
+    val inputNode = flowBuilder.node("Input").asInput()
+    val outputNode = flowBuilder.node("Output").asOutput()
+    val errorNode = flowBuilder.node("Error")(errorCauseProp -> e.getStackTrace.mkString("\n"))
+
     flowBuilder.toDataFlowFormat
   }
 
@@ -73,10 +84,18 @@ object DataFlowFormat {
 
 import DataFlowFormat._
 
-final case class DataFlowFormat(props: Map[String, Any], relations: Set[(String, Long)],
+import scala.util.Try
+
+final case class DataFlowFormat(props: Map[String, Any], relations: Map[String, Set[Long]],
                                 nodes: IndexedSeq[Node], inputNodeId: Int, outputNodeId: Int) {
 
   def apply(prop: String) = props(prop)
+
+  def id: Option[Long] = {
+    for {
+      id <- props.get(idProp)
+    } yield id.asInstanceOf[Long]
+  }
 
   def node(nodeId: Int): Node = {
     nodes(nodeId)
@@ -104,5 +123,24 @@ final case class DataFlowFormat(props: Map[String, Any], relations: Set[(String,
     } yield s"  -[$r]-> DataFlow($id)").mkString("\n")
 
     s"DataFlow {$propsRepr}:\n{$relationsRepr}:\n$nodesRepr"
+  }
+
+  def idInjection(id: Long): DataFlowFormat = {
+    this.copy(props = props + (idProp -> id))
+  }
+
+  def relationInjection(relationType: String, id: Long): DataFlowFormat = {
+    val relations = this.relations.getOrElse(relationType, Set.empty)
+    val injected = this.relations.updated(relationType, relations + id)
+    this.copy(relations = injected)
+  }
+
+  def uniqueRelationInjection(relationType: String, id: Long): DataFlowFormat = {
+    val injected = this.relations.updated(relationType, Set(id))
+    this.copy(relations = injected)
+  }
+
+  def parentInjection(id: Long): DataFlowFormat = {
+    uniqueRelationInjection(parentRelation, id)
   }
 }

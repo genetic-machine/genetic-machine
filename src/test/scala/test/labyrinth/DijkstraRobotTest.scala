@@ -30,7 +30,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
   }
 
   class RobotBrainActor(val labGen: LabyrinthGenerator, val vision: Vision) extends Actor {
-    val brain = context.actorOf(Props(new DijkstraBrain(DijkstraBrain.serialization())))
+    val brain = context.actorOf(Props(new DijkstraBrain(DijkstraBrain.empty)))
     val robot = context.actorOf(Props(new LabyrinthRobot(brain, labGen, vision, ZeroFeedback)))
 
     override def receive: Receive = wait(robot)

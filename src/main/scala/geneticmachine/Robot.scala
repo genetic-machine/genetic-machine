@@ -1,8 +1,8 @@
 package geneticmachine
 
-import akka.actor.{ ActorLogging, ActorRef, Actor}
+import akka.actor.{Props, ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
-import geneticmachine.dataflow.DataFlowFormat
+import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
 import scala.util.{Failure, Success}
 import common.MessageProtocol
 import scala.concurrent.Future
@@ -15,7 +15,14 @@ object Robot {
   import MessageProtocol._
 
   case class Finish[+StatusT : ClassTag](brain: ActorRef, status: StatusT) extends Response
-  case class Failure(e: Throwable, brain: ActorRef) extends Response
+}
+
+trait RobotFactory[I, O, F, +S] {
+  def errorDff(e: Throwable): DataFlowFormat = {
+    DataFlowFormat.errorDff(DataFlowFormat.robotLabel, e)
+  }
+
+  def props(brain: ActorRef): Props
 }
 
 /**
@@ -29,21 +36,25 @@ object Robot {
  *@param brain brain to guide.
  */
 abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
-                     OutputT : ClassTag, ActuatorResponseT : ClassTag]
+                     OutputT : ClassTag, FeedbackT : ClassTag]
   (val brain: ActorRef) extends Actor with ActorLogging {
 
   import context.dispatcher
 
   implicit val timeout = Timeout(1.minute)
 
-  def unexpectedResponse(reason: String, msg: Any) {
-    val e = MessageProtocol.UnexpectedResponse(reason, msg)
-    log.error(e, s"Unexpected response! $msg")
+  def unexpectedResponse(during: String, msg: Any, expected: Any) {
+    val e = MessageProtocol.UnexpectedResponse(during, msg, expected)
     failure(e)
   }
 
+  def unexpectedResponse[T](during: String, msg: Any)(implicit ev: ClassTag[T]) {
+    unexpectedResponse(during, msg, ev.toString())
+  }
+
   def failure(e: Throwable) {
-    context.parent ! Robot.Failure(e, brain)
+    log.error(e, "Robot failed!")
+    context.parent ! MessageProtocol.Fail(e)
   }
 
   /**
@@ -60,7 +71,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * @param brainOutput brain's response
    * @return Some(), that includes new robot's status and new brain's input, if goal is not achieved, otherwise None
    */
-  def processOutput(status: StatusT, brainOutput: OutputT): Future[(StatusT, Option[InputT])]
+  def process(status: StatusT, brainOutput: OutputT): Future[(StatusT, Option[InputT])]
 
   /**
    * The supervisor's function.
@@ -68,13 +79,13 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * @param status current status of robot and environment
    * @param brainOutput brain's response
    */
-  def scoreOutput(status: StatusT, brainOutput: OutputT): Future[ActuatorResponseT]
+  def feedback(status: StatusT, brainOutput: OutputT): Future[FeedbackT]
 
   def serialize(status: StatusT): Future[DataFlowFormat]
 
   final def waitBrain(status: StatusT, brainResponse: OutputT): Receive = {
     case MessageProtocol.Ready if sender() == brain =>
-      val state = processOutput(status, brainResponse)
+      val state = process(status, brainResponse)
 
       state.onSuccess {
         case (newStatus: StatusT, Some(inputData: InputT)) =>
@@ -89,10 +100,10 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
               context.parent ! Robot.Finish(brain, newStatus)
 
             case Failure(e) =>
-              context.parent ! Robot.Failure(e, brain)
+              failure(e)
 
             case msg =>
-              context.parent ! Robot.Failure(MessageProtocol.UnexpectedResponse("brain release", msg), brain)
+              unexpectedResponse("Brain reset:", msg, MessageProtocol.Ready)
           }
       }
 
@@ -101,7 +112,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
       }
 
     case msg if context.sender() == brain =>
-      unexpectedResponse(s"must be ${MessageProtocol.Ready} instead of $msg", msg)
+      unexpectedResponse(s"Feedback propagation:", msg, MessageProtocol.Ready)
 
     case _ =>
       context.sender() ! MessageProtocol.Busy
@@ -113,10 +124,10 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    */
   final def scoreBrain(status: StatusT): Receive = {
     case Brain.Output(brainOutput: OutputT) =>
-      val score = scoreOutput(status, brainOutput)
+      val score = feedback(status, brainOutput)
 
       score.onSuccess {
-        case response: ActuatorResponseT =>
+        case response: FeedbackT =>
           context.become(waitBrain(status, brainOutput), discardOld = true)
           brain ! Brain.Feedback(response)
       }
@@ -128,7 +139,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
       }
 
     case msg if sender() == brain =>
-      unexpectedResponse(s"must be ${classOf[Brain.Output[OutputT]]}", msg)
+      unexpectedResponse[OutputT](s"Action expectation", msg)
   }
 
   final def finish(status: StatusT): Receive = {

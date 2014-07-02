@@ -12,7 +12,9 @@ object MessageProtocol {
   case object Ready extends Response
   case object Busy extends Response
 
-  case class UnexpectedResponse(reason: String, msg: Any) extends Throwable(reason)
+  case class UnexpectedResponse(reason: String, msg: Any, expected: Any)
+    extends Throwable(s"$reason, received: $msg, expected: $expected")
+
   case class InitializationFailure(e: Throwable) extends Throwable(e)
 
   case object Serialize extends Request

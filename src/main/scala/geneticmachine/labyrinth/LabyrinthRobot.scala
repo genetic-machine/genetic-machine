@@ -1,6 +1,6 @@
 package geneticmachine.labyrinth
 
-import geneticmachine.Robot
+import geneticmachine.{RobotFactory, Robot}
 
 import akka.actor.{Props, ActorRef}
 
@@ -13,15 +13,25 @@ import geneticmachine.labyrinth.generators._
 import geneticmachine.labyrinth.feedback._
 
 object LabyrinthRobot {
-  def sampleProps(brain: ActorRef): Props = {
-    Props(classOf[LabyrinthRobot], brain,
-      RandomWalkGenerator(3, 3)(Point(31, 31)), SimpleVision(5), ZeroFeedback)
+  def sampleFactory: LabyrinthRobotFactory = {
+    val labGen = RandomWalkGenerator(3, 3)(Point(51, 51))
+    val vision = SimpleVision(5)
+    val feedback = ZeroFeedback
+    LabyrinthRobotFactory(labGen)(vision)(feedback)
   }
+}
+
+case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
+                                (vision: Vision)
+                                (feedbackStrategy: FeedbackStrategy) extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthStatus] {
+  def props(brain: ActorRef) = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy)
+
+  override def toString: String = s"LabyrinthRobot($labGen, $vision, $feedbackStrategy)"
 }
 
 class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
                      val vision: Vision, val feedbackStrategy: FeedbackStrategy)
-  extends Robot[LabyrinthInput, LabyrinthStatus, LabyrinthCommand.LabyrinthCommand, LabyrinthScore](brain) {
+  extends Robot[LabyrinthInput, LabyrinthStatus, LabyrinthCommand.LabyrinthCommand, LabyrinthFeedback](brain) {
 
   import context.dispatcher
 
@@ -39,7 +49,7 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
     (status, initialInput)
   }
 
-  def processOutput(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
+  def process(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
     val (newPosition, newDirection) = brainOutput match {
       case LabyrinthCommand.Forward if (status.robotPosition + status.robotDirection).inLabyrinth(status.labyrinth) =>
         (status.robotPosition + status.robotDirection, status.robotDirection)
@@ -61,7 +71,7 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
     (newStatus, if (newPosition == status.goal) None else Some(newInput))
   }
 
-  override def scoreOutput(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
+  override def feedback(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
     feedbackStrategy(status, brainOutput)
   }
 
@@ -72,8 +82,15 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
     val output = builder.node("BrainScore").asOutput()
 
     val labGenNode = builder.node("Labyrinth generator")("method" -> labyrinthGen.toString())
+    val (labRepr, rows, cols) = Labyrinth.toArray(status.labyrinth)
+    labGenNode("result" -> labRepr)
+    labGenNode("rows" -> rows)
+    labGenNode("cols" -> cols)
+
     val visionNode = builder.node("Vision")("method" -> vision.toString())
-    val robotNode = builder.node("RobotRef", 2, 1)
+    val robotNode = builder.node("Robot", 2, 1)
+    robotNode("result" -> status.history.map { c => c.id }.reverse.toArray)
+
     val physicsNode = builder.node("Labyrinth Physics", 2, 2)
 
     val reinforcementLearningNode = builder.node("Reinforcement Learning")("method" -> feedbackStrategy.toString)

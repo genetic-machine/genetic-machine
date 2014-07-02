@@ -96,11 +96,17 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
     mainNode.createRelationshipTo(inputNode, write)
     mainNode.createRelationshipTo(outputNode, read)
 
+    println("DFF to save: ", dff)
+    println(dff.relations)
+
     for {
-      (relationType, id) <- dff.relations
+      (relationType, ids) <- dff.relations
+      id <- ids
     } {
-      val endNode = graphDB.getNodeById(id)
-      mainNode.createRelationshipTo(endNode, DynamicRelationshipType.withName(relationType))
+      Try {
+        val endNode = graphDB.getNodeById(id)
+        mainNode.createRelationshipTo(endNode, DynamicRelationshipType.withName(relationType))
+      }
     }
 
     mainNode.getId
@@ -190,7 +196,7 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
     }
 
     /** ID injection **/
-    dffBuilder("$id" -> id)
+    dffBuilder.withId(id)
 
     dffBuilder.withInput(neoToDff(inputNode)).withOutput(neoToDff(outputNode)).toDataFlowFormat
   }

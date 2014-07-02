@@ -1,10 +1,11 @@
 package geneticmachine
 
-import akka.actor.{ActorLogging, ActorRef, Actor}
-import geneticmachine.dataflow.DataFlowFormat
+import akka.actor.{Props, ActorLogging, ActorRef, Actor}
+import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
+import DataFlowFormat._
 
 import common.{MessageProtocol => MP}
 
@@ -17,6 +18,17 @@ object Brain {
   case class Feedback[FeedbackT : ClassTag](data: FeedbackT) extends Request
 
   case object Reset extends Request
+
+  //def props[T <: Brain](dff: DataFlowFormat): Props = Props(Class[T], dff)
+}
+
+trait BrainFactory[I, O, F] {
+  def props(dff: DataFlowFormat): Props
+  def empty: DataFlowFormat
+
+  def errorDff(e: Throwable): DataFlowFormat = {
+    DataFlowFormat.errorDff(brainLabel, e)
+  }
 }
 
 /**
@@ -56,8 +68,13 @@ object Brain {
  * @tparam StateT type of inner state.
  */
 abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
-                     FeedbackT : ClassTag, StateT : ClassTag](dff: DataFlowFormat)
+                     FeedbackT : ClassTag, StateT : ClassTag](val dff: DataFlowFormat)
   extends Actor with ActorLogging {
+
+  type IT = InputT
+  type OT = OutputT
+  type FT = FeedbackT
+  type InnerT = StateT
 
   import context.dispatcher
 
@@ -162,7 +179,6 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
         case newState: StateT =>
           context.become(process(newState), discardOld = true)
           requester ! MP.Ready
-          context.parent ! MP.Ready
       }
 
       resetting.onFailure {

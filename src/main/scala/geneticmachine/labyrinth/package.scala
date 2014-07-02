@@ -23,6 +23,15 @@ package object labyrinth {
     def unknown(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Unknown)
     def occupied(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Occupied)
     def free(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Free)
+
+    def toArray(lab: Labyrinth): (Array[CellStatus], Int, Int) = {
+      val labRepr = for {
+        row <- 0 until lab.rows
+        col <- 0 until lab.cols
+      } yield lab(row, col)
+
+      (labRepr.toArray, lab.rows, lab.cols)
+    }
   }
 
   type CostMap = DenseMatrix[Int]
@@ -230,6 +239,11 @@ package object labyrinth {
 
       result
     }
+
+    override def toString: String = {
+      s"LabyrinthStatus(labyrinth: ${labyrinth.rows}x${labyrinth.cols}, " +
+        s"position: $robotPosition, direction: $robotDirection, goal: $goal, history: ${history.size} commands)"
+    }
   }
 
   def strictMinPathSensor(labInput: LabyrinthInput): CommandSignal = {
@@ -239,5 +253,5 @@ package object labyrinth {
 
   type LabyrinthOutput = LabyrinthCommand.LabyrinthCommand
 
-  case class LabyrinthScore(score: Double)
+  case class LabyrinthFeedback(value: Double)
 }

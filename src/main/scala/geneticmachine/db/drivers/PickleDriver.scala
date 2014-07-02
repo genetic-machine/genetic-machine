@@ -19,7 +19,7 @@ object PickleDriver {
   }
 
   /** Pickler doesn't work with Vector[Node], but do work with List */
-  final class PickleDFF(val props: Map[String, Any], val relations: Set[(String, Long)], val nodes: List[Node], val inputNodeId: Int, val outputNodeId: Int) {
+  final class PickleDFF(val props: Map[String, Any], val relations: Map[String, Set[Long]], val nodes: List[Node], val inputNodeId: Int, val outputNodeId: Int) {
   }
 }
 
@@ -62,10 +62,6 @@ class PickleDriver(val dbPath: String) extends DBDriver {
     brainID
   }
 
-  def idInjection(dff: DataFlowFormat, brainId: Long): DataFlowFormat = {
-    dff.copy(props = dff.props + ("$id" -> brainId))
-  }
-
   override def load(brainId: Long): DataFlowFormat = {
     val file = new File(dbDir, getFileName(brainId))
     val fr = new FileInputStream(file)
@@ -73,7 +69,7 @@ class PickleDriver(val dbPath: String) extends DBDriver {
     fr.read(pickled)
     val PickleDFF(dff) = BinaryPickle(pickled).unpickle[PickleDFF]
 
-    idInjection(dff, brainId)
+    dff.idInjection(brainId)
   }
 
   override def shutdown(): Unit = ()

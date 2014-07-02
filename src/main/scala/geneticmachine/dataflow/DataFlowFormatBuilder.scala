@@ -31,13 +31,20 @@ object DataFlowFormatBuilder {
   }
 
   final case class FlowRelationRef(relationType: String, parent: DataFlowFormatBuilder) {
+    def -*>(flowId: Long): DataFlowFormatBuilder = {
+      parent.relations(relationType) = Set(flowId)
+      parent
+    }
+    
     def -->(flowId: Long): DataFlowFormatBuilder = {
-      parent.relations.add((relationType, flowId))
+      val relations = parent.relations.getOrElse(relationType, Set.empty[Long])
+      parent.relations(relationType) = relations + flowId
       parent
     }
 
     def -/-(flowId: Long): DataFlowFormatBuilder = {
-      parent.relations.remove((relationType, flowId))
+      val relations = parent.relations.getOrElse(relationType, Set.empty[Long])
+      parent.relations(relationType) = relations - flowId
       parent
     }
   }
@@ -89,7 +96,7 @@ final class DataFlowFormatBuilder(label: String) {
 
   private val nodes: mutable.Map[Long, NodeBuilder] = mutable.LongMap.empty[NodeBuilder]
   private val edges: mutable.Map[Long, Array[mutable.Set[PortBuilder]]] = mutable.LongMap.empty[Array[mutable.Set[PortBuilder]]]
-  private val relations: mutable.Set[(String, Long)] = mutable.Set.empty[(String, Long)]
+  private val relations: mutable.Map[String, Set[Long]] = mutable.Map.empty[String, Set[Long]]
 
   private val props: mutable.Map[String, Any] = mutable.Map[String, Any](labelProp -> label)
 
@@ -109,7 +116,12 @@ final class DataFlowFormatBuilder(label: String) {
   }
 
   def withParent(id: Long): DataFlowFormatBuilder = {
-    this(parentRelation) --> id
+    this(parentRelation) -*> id
+    this
+  }
+
+  def withId(id: Long): DataFlowFormatBuilder = {
+    this(idProp -> id)
     this
   }
 
@@ -205,6 +217,6 @@ final class DataFlowFormatBuilder(label: String) {
     val inputNodeId = indexTransform(inputNode.get.nodeId)
     val outputNodeId = indexTransform(outputNode.get.nodeId)
 
-    DataFlowFormat(props.toMap, relations.toSet, nodeSeq, inputNodeId, outputNodeId)
+    DataFlowFormat(props.toMap, relations.toMap, nodeSeq, inputNodeId, outputNodeId)
   }
 }

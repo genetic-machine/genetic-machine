@@ -1,6 +1,7 @@
 package geneticmachine.labyrinth
 
-import geneticmachine.Brain
+import akka.actor.Props
+import geneticmachine.{BrainFactory, Brain}
 import LabyrinthCommand.LabyrinthCommand
 import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
 import geneticmachine.dataflow.DataFlowFormat._
@@ -8,8 +9,13 @@ import geneticmachine.dataflow.DataFlowFormat._
 import scala.concurrent.Future
 import scala.util.Try
 
-object DijkstraBrain {
-  def serialization(parentID: Option[Long] = None): DataFlowFormat = {
+object DijkstraBrain extends BrainFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback] {
+
+  def props(dff: DataFlowFormat) = Props(classOf[DijkstraBrain], dff)
+
+  override def toString: String = "Dijkstra Brain"
+
+  def empty: DataFlowFormat = {
     val builder = DataFlowFormatBuilder(brainLabel)
     val inputNode = builder.node("LabyrinthInput").asInput()
     val outputNode = builder.node("LabyrinthOutput").asOutput()
@@ -18,27 +24,17 @@ object DijkstraBrain {
     inputNode --> aiNode
     aiNode --> outputNode
 
-    for {
-      id <- parentID
-    } {
-      builder(parentRelation) --> id
-    }
-
     builder.toDataFlowFormat
   }
 }
 
 class DijkstraBrain(dff: DataFlowFormat)
-  extends Brain[LabyrinthInput, LabyrinthCommand, LabyrinthScore, Integer](dff) {
+  extends Brain[LabyrinthInput, LabyrinthCommand, LabyrinthFeedback, Integer](dff) {
 
   import context.dispatcher
 
   override def serialize(state: Integer) = Future.successful {
-    val parentID = Try {
-      dff.props("$id").asInstanceOf[Long]
-    }.toOption
-
-    DijkstraBrain.serialization(parentID)
+    DijkstraBrain.empty
   }
 
   override def init(dff: DataFlowFormat): Integer = 0
@@ -49,7 +45,7 @@ class DijkstraBrain(dff: DataFlowFormat)
     (newState, command)
   }
 
-  override def feedback(state: Integer, score: LabyrinthScore) = Future.successful(state)
+  override def feedback(state: Integer, score: LabyrinthFeedback) = Future.successful(state)
 
   override def reset(state: Integer) = Future.successful(state)
 }

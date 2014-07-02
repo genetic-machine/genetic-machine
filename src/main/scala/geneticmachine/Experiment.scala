@@ -1,85 +1,55 @@
 package geneticmachine
 
-import java.util.concurrent.TimeUnit
+import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain}
 
-import akka.actor.{Props, ActorRef, ActorLogging, Actor}
-import akka.pattern.ask
-import akka.util.Timeout
-import common.MessageProtocol
-
-import geneticmachine.dataflow.DataFlowFormat
-import geneticmachine.db.DBActor._
-
+import scala.collection.immutable.Queue
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
+import scala.reflect.ClassTag
 
 object Experiment {
-  type BrainGen = (Option[DataFlowFormat]) => Props
-  type RobotGen = (ActorRef) => Props
 
-  import MessageProtocol._
+  final case class Using[I, O, F](brainFactory: BrainFactory[I, O, F]) {
+    def startWith(id: Long) = new EmptyExperiment(brainFactory, Some(id))
+    def startWithNew = new EmptyExperiment(brainFactory, None)
+  }
 
-  case class Finish(brainDFFId: Long, robotDFFId: Long) extends Response
+  def using[I, O, F](brainFactory: BrainFactory[I, O, F]) = Using[I, O, F](brainFactory)
 }
 
-import Experiment._
+trait ExperimentContext {
+  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[List[S]]
+}
 
-class Experiment(brainDFFId: Option[Long], brainGen: BrainGen, robotGen: RobotGen)(implicit dbActor: ActorRef) extends Actor with ActorLogging {
-  import context.dispatcher
+sealed abstract class Experiment[I, O, F, +S : ClassTag]
+  (val brainFactory: BrainFactory[I, O, F],
+   val startWith: Option[Long],
+   val cycles: Queue[RobotFactory[I, O, F, S]]) {
 
-  implicit val timeout: akka.util.Timeout = new Timeout(3, TimeUnit.SECONDS)
-
-  brainDFFId match {
-    case Some(id) =>
-      (dbActor ? Load(id)).onComplete {
-        case Success(Loaded(dff)) =>
-          val brain = context.actorOf(brainGen(Some(dff)))
-          val robot = context.actorOf(robotGen(brain))
-          context.become(initialized(brain, robot))
-
-        case Failure(e: Throwable) =>
-          context.parent ! MessageProtocol.Fail(e)
-
-        case msg =>
-          context.parent ! MessageProtocol.Fail(MessageProtocol.UnexpectedResponse("DFF load", msg))
-      }
-
-    case None =>
-      val brain = context.actorOf(brainGen(None))
-      val robot = context.actorOf(robotGen(brain))
-      context.become(initialized(brain, robot))
+  def testWith[T >: S](robotFactory: RobotFactory[I, O, F, T])(implicit ev: ClassTag[T]): NonEmptyExperiment[I, O, F, T] = {
+    new NonEmptyExperiment(brainFactory, startWith, cycles.enqueue(robotFactory))
   }
 
-
-  def dffExperimentInjection(dff: DataFlowFormat, brainId: Long): DataFlowFormat = {
-    dff.copy(relations = dff.relations + (DataFlowFormat.experimentRelation -> brainId))
+  def execute()(implicit context: ExperimentContext): Future[List[S]] = {
+    context.executeExperiment(this)
   }
+}
 
-  def serialize(brain: ActorRef, robot: ActorRef) : Future[(Long, Long)] = {
-    for {
-      MessageProtocol.Serialized(brainDff) <- brain ? MessageProtocol.Serialize
-      MessageProtocol.Serialized(robotDff) <- robot ? MessageProtocol.Serialize
-      Saved(brainId) <- dbActor ? Save(brainDff)
-      Saved(robotId) <- dbActor ? Save(dffExperimentInjection(robotDff, brainId))
-    } yield (brainId, robotId)
-  }
+final class EmptyExperiment[I, O, F](brainFactory: BrainFactory[I, O, F],
+                                     startWith: Option[Long])
+  extends Experiment[I, O, F, Nothing](brainFactory, startWith, Queue.empty)
 
-  def initialized(brain: ActorRef, robot: ActorRef): Receive = {
-    case Robot.Finish(`brain`, _) =>
-      val serialization = serialize(brain, robot)
+final class NonEmptyExperiment[I, O, F, +S : ClassTag]
+  (brainFactory: BrainFactory[I, O, F],
+   startWith: Option[Long],
+   cycles: Queue[RobotFactory[I, O, F, S]])
+  extends Experiment[I, O, F, S](brainFactory, startWith, cycles) {
 
-      serialization.onSuccess {
-        case (bId: Long, rId: Long) =>
-          context.parent ! Finish(bId, rId)
-      }
+  def repeat(count: Int): NonEmptyExperiment[I, O, F, S] = {
+    val last = cycles.last
+    val newCycles = (0 until count).foldLeft(cycles) { (acc, _) =>
+      acc.enqueue(last)
+    }
 
-      serialization.onFailure {
-        case e: Throwable =>
-          context.parent ! MessageProtocol.Fail(e)
-      }
-  }
-
-  def receive: Receive = {
-    case _ =>
+    new NonEmptyExperiment(brainFactory, startWith, newCycles)
   }
 }
