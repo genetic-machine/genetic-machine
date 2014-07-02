@@ -15,5 +15,8 @@ val result1: Future[Experiment.Result[LabyrinthStatus]] = GeneticMachine {
 /** OR **/
 
 val result2: Future[Experiment.Result[LabyrinthStatus]] =
-  using(DijkstraBrain).startWith(28).testWith(LabyrinthRobot.sampleFactory).repeat(2).execute()
+  using(DijkstraBrain).startWith(28).
+    testWith(LabyrinthRobot.sampleFactory).
+      repeat(2).
+        execute()
 ```
