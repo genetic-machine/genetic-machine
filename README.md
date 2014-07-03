@@ -6,7 +6,7 @@ Although, the current development goal is to implement and solve so called 'laby
 
 **Version 0.1 has been released!**
 
-## In an few words
+## In a few words
 ```scala
 import geneticmachine._
 import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain, LabyrinthStatus}
@@ -25,11 +25,12 @@ val result2: Future[Experiment.Result[LabyrinthStatus]] =
         execute()
 ```
 
-## Libraries
+## External libraries
 *  [Scala](http://www.scala-lang.org/)
 *  [Akka](http://akka.io/)
 *  [Breeze](https://github.com/scalanlp/breeze)
 *  [Neo4j Graph DB](http://www.neo4j.org/)
+*  [Scala pickling](https://github.com/scala/pickling)
 
 ## Features and TODOs
 
@@ -38,6 +39,10 @@ val result2: Future[Experiment.Result[LabyrinthStatus]] =
 - [x] Basic concurrent Robot-Brain architecture based on actor model (v0.1);
 - [x] Fault-tolerance (v0.1);
 - [x] Generalized graph-oriented (dataflow-oriented) serialization format (Data Flow Format) (v0.1);
+
+- [x] DB drivers:
+  - [x] Neo4j driver;
+  - [x] Pickle driver;
 
 - [x] DB serialization (v0.1):
   - [x] data flow (v0.1);
@@ -74,16 +79,16 @@ val result2: Future[Experiment.Result[LabyrinthStatus]] =
   - [ ] remote receptionist (for web-interface).
 
 - [ ] General 'theoretical' features:
-  - [x] Feedback loop (for reinforcement learning) (v0.1);
-  - [ ] Unacceptable behaviour detection.
+  - [x] feedback loop (for reinforcement learning) (v0.1);
+  - [ ] unacceptable behaviour detection.
 
 ### Labyrinth specific
 - [ ] labyrinth visualization;
 
 - [ ] Labyrinth feedback:
   - [ ] a primitive feedback;
-  - [ ] Oracle-based (aka Laplace's demon);
-  - [ ] Based on brain's knowledge.
+  - [ ] oracle-based (aka Laplace's demon);
+  - [ ] based on brain's knowledge.
 
 - [ ] Labyrinth generators:
   - [x] Random walk generator (v0.1);
@@ -91,9 +96,9 @@ val result2: Future[Experiment.Result[LabyrinthStatus]] =
   - [ ] Maze-like generator.
 
 - [ ] Vision:
-  - [x] absolute (v0.1);
-  - [x] cost-map based (v0.1);
-  - [x] BFS based (v0.1);
+  - [x] absolute (i.e. full vision) (v0.1);
+  - [x] cost-map based (i.e. an approximation for true vision) (v0.1);
+  - [x] BFS based (something in the middle of full and true visions) (v0.1);
   - [ ] ray/shadow cast (i.e. true vision).
 
 - [ ] Efficiency metrics.
