@@ -1,7 +1,7 @@
 package test.db.drivers
 
 import geneticmachine.db.drivers._
-import geneticmachine.dataflow.DataFlowFormat
+import common.dataflow.DataFlowFormat
 import org.scalatest._
 import test._
 
@@ -11,11 +11,11 @@ import scala.concurrent.duration._
 
 class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers with BeforeAndAfterAll {
 
-  def this() { this(new Neo4JDriver("./test-db-driver")) }
+  def this() { this(new Neo4JDriver("./genetic-machine-db")) }
 
   override def afterAll() {
     driver.shutdown()
-    cleanDirectory("./test-db-driver")
+    cleanDirectory("./genetic-machine-db")
   }
 
   val dff = DataFlowFormat.sample

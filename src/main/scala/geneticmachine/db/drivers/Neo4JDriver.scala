@@ -1,10 +1,10 @@
 package geneticmachine.db.drivers
 
-import geneticmachine.dataflow.DataFlowFormatBuilder.NodeRef
-import geneticmachine.dataflow.{DataFlowFormat => DFF, DataFlowFormatBuilder}
+import common.dataflow.DataFlowFormatBuilder.NodeRef
+import common.dataflow.{DataFlowFormat => DFF, DataFlowFormatBuilder}
 
-import geneticmachine.dataflow.DataFlowFormat._
-import geneticmachine.dataflow.DataFlowFormat.{ Node => DFFNode}
+import common.dataflow.DataFlowFormat._
+import common.dataflow.DataFlowFormat.{ Node => DFFNode}
 
 import org.neo4j.graphdb._
 import org.neo4j.graphdb.factory.GraphDatabaseFactory
@@ -96,9 +96,6 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
     mainNode.createRelationshipTo(inputNode, write)
     mainNode.createRelationshipTo(outputNode, read)
 
-    println("DFF to save: ", dff)
-    println(dff.relations)
-
     for {
       (relationType, ids) <- dff.relations
       id <- ids
@@ -112,78 +109,71 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
     mainNode.getId
   }
 
-  private def getInputsOutputs(node: NeoNode): (Int, Int) = {
+  def getInputsOutputs(node: NeoNode): (Int, Int) = {
     val ins = node.getProperty(inputsProp).asInstanceOf[Int]
     val outs = node.getProperty(outputsProp).asInstanceOf[Int]
     (ins, outs)
   }
 
-  private def getPorts(rel: Relationship): (Int, Int) = {
+  def getPorts(rel: Relationship): (Int, Int) = {
     val portFrom = rel.getProperty(portFromProp).asInstanceOf[Int]
     val portTo = rel.getProperty(portToProp).asInstanceOf[Int]
     (portFrom, portTo)
+  }
+
+  def bfs(open: Set[NeoNode], closed: Set[NeoNode]): Set[NeoNode] = {
+    val wave = for {
+      node <- open
+      rel <- node.getRelationships(Direction.OUTGOING, connected).toList
+      otherNode = rel.getEndNode
+      if !closed.contains(otherNode) && !open.contains(otherNode)
+    } yield otherNode
+
+    if (wave.isEmpty) {
+      open ++ closed
+    } else {
+      bfs(wave, open ++ closed)
+    }
+  }
+
+  def createDFFNode(neoNode: NeoNode, dffBuilder: DataFlowFormatBuilder): NodeRef = {
+    val (inputs, outputs) = getInputsOutputs(neoNode)
+    val ref = dffBuilder.node(inputs, outputs)
+
+    val propKeys = neoNode.getPropertyKeys.toSet -- Set(inputsProp, outputsProp)
+
+    for {
+      key <- propKeys
+      value = neoNode.getProperty(key)
+    } {
+      ref(key -> value)
+    }
+
+    ref
   }
 
   override def load(id: Long): DFF = withTx {
     val mainNode = graphDB.getNodeById(id)
 
     def getOnlyConnectedNode(node: NeoNode, rel: RelationshipType): NeoNode = {
-      val rels = node.getRelationships(Direction.OUTGOING, rel).toList
-      if (rels.length != 1) {
+      val relations = node.getRelationships(Direction.OUTGOING, rel).toList
+      if (relations.length != 1) {
         throw new NotFoundException("No or multiple inputs!")
       }
 
-      rels(0).getEndNode
-    }
-
-    def getNonReadWriteRelationships(node: NeoNode): Map[String, Long] = {
-      (for {
-        rel <- node.getRelationships(Direction.OUTGOING)
-        if !rel.isType(write) && !rel.isType(read)
-      } yield (rel.getType.name(), rel.getEndNode.getId)).toMap
+      relations(0).getEndNode
     }
 
     val inputNode = getOnlyConnectedNode(mainNode, write)
     val outputNode = getOnlyConnectedNode(mainNode, read)
 
-    def traverse(open: Set[NeoNode], closed: Set[NeoNode]): Set[NeoNode] = {
-      val wave = for {
-        node <- open
-        rel <- node.getRelationships(Direction.OUTGOING, connected).toList
-        otherNode = rel.getEndNode
-        if !closed.contains(otherNode) && !open.contains(otherNode)
-      } yield otherNode
-
-      if (wave.isEmpty) {
-        open ++ closed
-      } else {
-        traverse(wave, open ++ closed)
-      }
-    }
-
-    val neoNodes = traverse(Set(inputNode), Set.empty)
+    val neoNodes = bfs(Set(inputNode), Set.empty)
 
     val dffBuilder = DataFlowFormatBuilder(mainNode.getLabels.toList(0).name())
 
-    def createDFFNode(neoNode: NeoNode): NodeRef = {
-      val (inputs, outputs) = getInputsOutputs(neoNode)
-      val ref = dffBuilder.node(inputs, outputs)
-
-      val propKeys = neoNode.getPropertyKeys.toSet -- Set(inputsProp, outputsProp)
-
-      for {
-        key <- propKeys
-        value = neoNode.getProperty(key)
-      } {
-        ref(key -> value)
-      }
-
-      ref
-    }
-
     val neoToDff = (for {
       neoNode <- neoNodes
-      dffNode = createDFFNode(neoNode)
+      dffNode = createDFFNode(neoNode, dffBuilder)
     } yield (neoNode, dffNode)).toMap
 
     for {
@@ -199,5 +189,60 @@ final class Neo4JDriver(val dbPath: String) extends DBDriver {
     dffBuilder.withId(id)
 
     dffBuilder.withInput(neoToDff(inputNode)).withOutput(neoToDff(outputNode)).toDataFlowFormat
+  }
+
+  def bidirectionalBfs(startNode: Long, deep: Int,
+                       limit: Long, permittedConnections: Seq[String]): Set[NeoNode] = {
+    val premittedRels = permittedConnections.map { c => DynamicRelationshipType.withName(c) }.toArray
+
+    def bfs(open: Set[NeoNode], closed: Set[NeoNode], deep: Int, limit: Long): Set[NeoNode] = {
+      val wave = for {
+        node <- open
+        rel <- node.getRelationships(Direction.BOTH, premittedRels: _*)
+        neigh = rel.getOtherNode(node)
+        if !open.contains(neigh) && !closed.contains(neigh)
+      } yield neigh
+
+      if (wave.isEmpty) {
+        open ++ closed
+      } else if (wave.size >= limit || deep <= 1) {
+        open ++ closed ++ wave
+      } else {
+        bfs(wave, open ++ closed, deep - 1, limit - wave.size)
+      }
+    }
+
+    bfs(Set(graphDB.getNodeById(startNode)), Set.empty, deep, limit - 1)
+  }
+
+  override def traverse(startNode: Long, deep: Int,
+                        limit: Long, permittedConnections: Seq[String]): DFF = withTx[DFF] {
+    val neoNodes = bidirectionalBfs(startNode, deep, limit, permittedConnections).toList
+    val dffBuilder = new DataFlowFormatBuilder("Traverse")
+    val dffNodes = neoNodes.map { nn =>
+      createDFFNode(nn, dffBuilder)
+    }
+
+    val neoToDff = neoNodes.zip(dffNodes).toMap
+
+    for {
+      (neoNode, dffNode) <- neoToDff
+      rel <- neoNode.getRelationships(Direction.BOTH, permittedConnections.map(DynamicRelationshipType.withName).toArray: _*)
+      otherNeo = rel.getOtherNode(neoNode)
+      otherDFF = neoToDff(otherNeo)
+    } {
+      if (rel.getStartNode == neoNode) {
+        dffNode --> otherDFF
+      } else {
+        otherDFF --> dffNode
+      }
+    }
+
+    val input = dffBuilder.node("Traverse Start").asInput()
+    input("limit" -> limit)("deep" -> deep)("permitted_connections" -> permittedConnections.mkString("[", ", ", "]"))
+    val output = dffBuilder.node("Traverse Result").asOutput()
+    output("size" -> neoNodes.size)
+
+    dffBuilder.toDataFlowFormat
   }
 }

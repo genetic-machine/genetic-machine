@@ -3,7 +3,9 @@ package geneticmachine.labyrinth
 import geneticmachine.labyrinth.Direction._
 
 package object generators {
-  type LabyrinthGenerator = () => (Labyrinth, Point, Point)
+  trait LabyrinthGenerator extends Serializable {
+    def apply(): (Labyrinth, Point, Point)
+  }
 
   def line(lab: Labyrinth, p: Point, len: Int, direction: Direction): Point = {
     val len_ = (direction match {

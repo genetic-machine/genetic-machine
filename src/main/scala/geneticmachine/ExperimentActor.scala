@@ -3,7 +3,7 @@ package geneticmachine
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import common.MessageProtocol
-import geneticmachine.dataflow.DataFlowFormat
+import common.dataflow.DataFlowFormat
 import geneticmachine.db.DBActor._
 import akka.pattern.ask
 
@@ -82,7 +82,7 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
         context.unwatch(brain)
         context.stop(brain)
         log.info(s"Experiment finished. Last brain id: $lastBrainId")
-        requester ! ExperimentActor.ExperimentResult[S](results)
+        requester ! ExperimentResult[S](results)
     }
   }
 
@@ -200,10 +200,12 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
         context.watch(brain)
         execute(context.sender(), brain, experiment.cycles, Nil, dff.id.get)
       } else {
-        context.sender() ! MessageProtocol.Fail(new Exception(s"${dff.id} Brain DFF has no id! $dff"))
+        val cause = new MessageProtocol.InitializationFailure(new Exception(s"${dff.id} Brain DFF has no id! $dff"))
+        panicShutdown(context.sender(), experiment.cycles, Nil, cause)
       }
 
     case msg@Failure(e: Throwable) =>
-      context.sender() ! MessageProtocol.Fail(e)
+      val cause = new MessageProtocol.InitializationFailure(e)
+      panicShutdown(context.sender(), experiment.cycles, Nil, cause)
   }
 }

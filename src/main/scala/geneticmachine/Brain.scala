@@ -1,7 +1,7 @@
 package geneticmachine
 
 import akka.actor.{Props, ActorLogging, ActorRef, Actor}
-import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
+import common.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
@@ -22,7 +22,7 @@ object Brain {
   //def props[T <: Brain](dff: DataFlowFormat): Props = Props(Class[T], dff)
 }
 
-trait BrainFactory[I, O, F] {
+trait BrainFactory[I, O, F] extends Serializable {
   def props(dff: DataFlowFormat): Props
   def empty: DataFlowFormat
 
@@ -115,7 +115,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
   def reset(state: StateT): Future[StateT]
 
   /**
-   * Saves current state into [[geneticmachine.dataflow.DataFlowFormat]].
+   * Saves current state into [[common.dataflow.DataFlowFormat]].
    * @param state current state.
    * @return serialazed state.
    */

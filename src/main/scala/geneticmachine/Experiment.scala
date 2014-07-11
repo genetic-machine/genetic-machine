@@ -1,7 +1,5 @@
 package geneticmachine
 
-import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain}
-
 import scala.collection.immutable.Queue
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -22,17 +20,24 @@ object Experiment {
 import Experiment._
 
 trait ExperimentContext {
-  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[Result[S]]
+  val experimentContext: ExperimentContext = this
+
+  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[Result[S]] = {
+    // Just because actor messages is always of type Any.
+    executeUntypedExperiment(experiment).mapTo[Result[S]]
+  }
+
+  def executeUntypedExperiment(experiment: Experiment[_, _, _, _]): Future[Any]
 
   def apply[S : ClassTag](ex: => Experiment[_, _, _, S]): Future[Result[S]] = {
-    executeExperiment(ex)
+    executeExperiment[S](ex)
   }
 }
 
 sealed abstract class Experiment[I, O, F, +S : ClassTag]
   (val brainFactory: BrainFactory[I, O, F],
    val startWith: Option[Long],
-   val cycles: Queue[RobotFactory[I, O, F, S]]) {
+   val cycles: Queue[RobotFactory[I, O, F, S]]) extends Serializable {
 
   def testWith[T >: S](robotFactory: RobotFactory[I, O, F, T])(implicit ev: ClassTag[T]): NonEmptyExperiment[I, O, F, T] = {
     new NonEmptyExperiment(brainFactory, startWith, cycles.enqueue(robotFactory))

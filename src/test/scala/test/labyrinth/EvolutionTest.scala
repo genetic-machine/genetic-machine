@@ -22,7 +22,7 @@ class EvolutionTest(_system: ActorSystem) extends TestKit(_system)
   def this() { this(ActorSystem("test-system")) }
 
   override def beforeAll() {
-    cleanDirectory("./test-db-driver")
+    cleanDirectory("./genetic-machine-db")
   }
 
   override def afterAll() {
@@ -31,7 +31,7 @@ class EvolutionTest(_system: ActorSystem) extends TestKit(_system)
 
   "Evolution" must {
     "work" in {
-      val dbActor = _system.actorOf(Props(new Neo4JActor("./test-db-driver")))
+      val dbActor = _system.actorOf(Props(new Neo4JActor("./genetic-machine-db")))
 
       val rf = LabyrinthRobot.sampleFactory
       val experiment = using(DijkstraBrain).startWithNew.testWith(rf).repeat(3)

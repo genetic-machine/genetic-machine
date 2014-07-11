@@ -1,4 +1,4 @@
-package geneticmachine.dataflow
+package common.dataflow
 
 object DataFlowFormat {
 

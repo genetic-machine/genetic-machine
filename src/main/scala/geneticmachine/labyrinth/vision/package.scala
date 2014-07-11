@@ -1,7 +1,9 @@
 package geneticmachine.labyrinth
 
 package object vision {
-  type Vision = (Labyrinth, Point) => Observation
+  trait Vision extends Serializable {
+    def apply(labyrinth: Labyrinth, from: Point): Observation
+  }
 
   final case class Observation(visionMap: Labyrinth, from: Point) {
     def impose(lab: Labyrinth): Labyrinth = {

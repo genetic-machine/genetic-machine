@@ -1,7 +1,7 @@
 package geneticmachine.db.drivers
 
-import geneticmachine.dataflow._
-import geneticmachine.dataflow.DataFlowFormat._
+import common.dataflow._
+import common.dataflow.DataFlowFormat._
 
 import java.io._
 

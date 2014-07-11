@@ -3,11 +3,10 @@ package geneticmachine.labyrinth
 import akka.actor.Props
 import geneticmachine.{BrainFactory, Brain}
 import LabyrinthCommand.LabyrinthCommand
-import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
-import geneticmachine.dataflow.DataFlowFormat._
+import common.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
+import common.dataflow.DataFlowFormat._
 
 import scala.concurrent.Future
-import scala.util.Try
 
 object DijkstraBrain extends BrainFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback] {
 

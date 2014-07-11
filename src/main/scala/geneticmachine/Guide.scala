@@ -11,7 +11,7 @@ import scala.util.{Failure, Success, Try}
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import common.MessageProtocol
-import dataflow.DataFlowFormat
+import common.dataflow.DataFlowFormat
 
 object Guide {
   val brainResetTimeout = 10.seconds

@@ -3,7 +3,7 @@ package geneticmachine.db
 import akka.actor.{Actor, ActorLogging}
 import common.{MessageProtocol => MP}
 import geneticmachine.db.drivers.DBDriver
-import geneticmachine.dataflow._
+import common.dataflow._
 
 import scala.concurrent.Future
 

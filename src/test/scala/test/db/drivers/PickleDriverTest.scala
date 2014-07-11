@@ -1,7 +1,7 @@
 package test.db.drivers
 
 import geneticmachine.db.drivers.PickleDriver
-import geneticmachine.dataflow.DataFlowFormat
+import common.dataflow.DataFlowFormat
 import org.scalatest._
 import test._
 

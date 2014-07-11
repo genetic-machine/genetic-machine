@@ -4,8 +4,8 @@ import geneticmachine.{RobotFactory, Robot}
 
 import akka.actor.{Props, ActorRef}
 
-import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
-import geneticmachine.dataflow.DataFlowFormat._
+import common.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
+import common.dataflow.DataFlowFormat._
 
 import scala.concurrent.Future
 import geneticmachine.labyrinth.vision._
@@ -23,7 +23,9 @@ object LabyrinthRobot {
 
 case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
                                 (vision: Vision)
-                                (feedbackStrategy: FeedbackStrategy) extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthStatus] {
+                                (feedbackStrategy: FeedbackStrategy)
+  extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthStatus] {
+
   def props(brain: ActorRef) = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy)
 
   override def toString: String = s"LabyrinthRobot($labGen, $vision, $feedbackStrategy)"
@@ -81,32 +83,21 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
     val input = builder.node("RobotInput").asInput()
     val output = builder.node("BrainScore").asOutput()
 
-    val labGenNode = builder.node("Labyrinth generator")("method" -> labyrinthGen.toString())
+    val robotNode = builder.node("Experiment")
+    robotNode("Labyrinth generator" -> labyrinthGen.toString)
+    robotNode("Vision" -> vision.toString)
+    robotNode("Learning" -> feedbackStrategy.toString)
+
     val (labRepr, rows, cols) = Labyrinth.toArray(status.labyrinth)
-    labGenNode("result" -> labRepr)
-    labGenNode("rows" -> rows)
-    labGenNode("cols" -> cols)
+    robotNode("Labyrinth" -> labRepr)
+    robotNode("Rows" -> rows)
+    robotNode("Cols" -> cols)
+    robotNode("Commands" -> status.history.map { _.id }.toArray)
+    robotNode("TrajectoryX" -> status.path.map { _.x }.toArray)
+    robotNode("TrajectoryY" -> status.path.map { _.y }.toArray)
 
-    val visionNode = builder.node("Vision")("method" -> vision.toString())
-    val robotNode = builder.node("Robot", 2, 1)
-    robotNode("result" -> status.history.map { c => c.id }.reverse.toArray)
-
-    val physicsNode = builder.node("Labyrinth Physics", 2, 2)
-
-    val reinforcementLearningNode = builder.node("Reinforcement Learning")("method" -> feedbackStrategy.toString)
-
-    input --> labGenNode
-    labGenNode --> physicsNode(1)
-
-    physicsNode(0) --> visionNode
-    visionNode --> robotNode(0)
-    robotNode --> reinforcementLearningNode
-    reinforcementLearningNode --> robotNode(1)
-
-    robotNode --> physicsNode(0)
-    visionNode --> robotNode(0)
-
-    physicsNode(1) --> output
+    input --> robotNode
+    robotNode --> output
 
     builder.toDataFlowFormat
   }

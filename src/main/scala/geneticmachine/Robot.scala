@@ -2,7 +2,7 @@ package geneticmachine
 
 import akka.actor.{Props, ActorLogging, ActorRef, Actor}
 import akka.pattern.ask
-import geneticmachine.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
+import common.dataflow.DataFlowFormat
 import scala.util.{Failure, Success}
 import common.MessageProtocol
 import scala.concurrent.Future
@@ -17,7 +17,7 @@ object Robot {
   case class Finish[+StatusT : ClassTag](brain: ActorRef, status: StatusT) extends Response
 }
 
-trait RobotFactory[I, O, F, +S] {
+trait RobotFactory[I, O, F, +S] extends Serializable {
   def errorDff(e: Throwable): DataFlowFormat = {
     DataFlowFormat.errorDff(DataFlowFormat.robotLabel, e)
   }

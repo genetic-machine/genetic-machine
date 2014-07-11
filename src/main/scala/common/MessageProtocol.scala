@@ -1,6 +1,6 @@
 package common
 
-import geneticmachine.dataflow.DataFlowFormat
+import common.dataflow.DataFlowFormat
 
 object MessageProtocol {
   abstract class Request

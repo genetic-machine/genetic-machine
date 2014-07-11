@@ -19,10 +19,10 @@ class GuideTest(system: ActorSystem) extends TestKit(system) with FlatSpecLike w
     this(ActorSystem("test"))
   }
 
-  implicit val dbActor: ActorRef = system.actorOf(Props(new Neo4JActor("./test-db-driver")), "Neo4J")
+  implicit val dbActor: ActorRef = system.actorOf(Props(new Neo4JActor("./genetic-machine-db")), "Neo4J")
 
   override def beforeAll() {
-    cleanDirectory("./test-db-driver")
+    cleanDirectory("./genetic-machine-db")
   }
 
   override def afterAll() {
