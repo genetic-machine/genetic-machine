@@ -139,11 +139,11 @@ package object labyrinth {
 
   import Direction._
 
-  def costMap(lab: Labyrinth, from: Point, deep: Int = Int.MaxValue): DenseMatrix[Int] = {
+  def costMap(lab: Labyrinth, from: Point, depth: Int = Int.MaxValue): DenseMatrix[Int] = {
     val costMap = DenseMatrix.fill(lab.rows, lab.cols)(Int.MaxValue)
     costMap(from.x, from.y) = 0
 
-    def breadthFirstSearch(openSet: Set[Point], closedSet: Set[Point], deep: Int) {
+    def breadthFirstSearch(openSet: Set[Point], closedSet: Set[Point], depth: Int) {
       val newOpenSet = for {
         p <- openSet
         n <- p.neighborsInLabyrinth(lab)
@@ -154,12 +154,12 @@ package object labyrinth {
         n
       }
 
-      if (newOpenSet.nonEmpty && deep > 0) {
-        breadthFirstSearch(newOpenSet, closedSet.union(openSet), deep - 1)
+      if (newOpenSet.nonEmpty && depth > 0) {
+        breadthFirstSearch(newOpenSet, closedSet.union(openSet), depth - 1)
       }
     }
 
-    breadthFirstSearch(Set[Point](from), Set.empty[Point], deep)
+    breadthFirstSearch(Set[Point](from), Set.empty[Point], depth)
     costMap
   }
 

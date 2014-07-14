@@ -7,12 +7,12 @@ package object vision {
 
   final case class Observation(visionMap: Labyrinth, from: Point) {
     def impose(lab: Labyrinth): Labyrinth = {
-      val deep = (visionMap.rows - 1) / 2
+      val depth = (visionMap.rows - 1) / 2
       for {
         x <- 0 until visionMap.rows
         y <- 0 until visionMap.cols
-        labX = x + from.x - deep
-        labY = y + from.y - deep
+        labX = x + from.x - depth
+        labY = y + from.y - depth
         if labX >= 0
         if labY >= 0
         if labX < lab.rows

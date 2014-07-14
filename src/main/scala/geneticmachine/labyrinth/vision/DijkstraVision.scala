@@ -3,13 +3,13 @@ package geneticmachine.labyrinth.vision
 import geneticmachine.labyrinth._
 
 object DijkstraVision {
-  def apply(deep: Int) = new DijkstraVision(deep)
+  def apply(depth: Int) = new DijkstraVision(depth)
 }
 
-class DijkstraVision(val deep: Int) extends Vision {
+class DijkstraVision(val depth: Int) extends Vision {
   def apply(labyrinth: Labyrinth, from: Point): Observation = {
-    val vision = Labyrinth.unknown(2 * deep + 1, 2 * deep + 1)
-    val offset = Point(deep, deep)
+    val vision = Labyrinth.unknown(2 * depth + 1, 2 * depth + 1)
+    val offset = Point(depth, depth)
     vision(offset.x, offset.y) = CellStatus.Free
 
     def breadthFirstSearch(openSet: Set[Point], closedSet: Set[Point]) {
@@ -17,7 +17,7 @@ class DijkstraVision(val deep: Int) extends Vision {
         p <- openSet
         neigh <- p.neighbors.filter { _.inBorders(labyrinth.rows, labyrinth.cols) }
         if !closedSet.contains(neigh)
-        if (neigh - from).l1Norm <= deep
+        if (neigh - from).l1Norm <= depth
       } yield {
         val visP = neigh - from + offset
         vision(visP.x, visP.y) = labyrinth(neigh.x, neigh.y)

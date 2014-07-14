@@ -12,8 +12,10 @@ object DBActor {
 
   case class Load(brainId: Long) extends Request
   case class Save(dff: DataFlowFormat) extends Request
+  case class Traverse(startId: Option[Long], depth: Int, limit: Long, relationType: Seq[String]) extends Request
 
   case class Loaded(dff: DataFlowFormat) extends Response
+  case class Traversed(dff: DataFlowFormat) extends Response
   case class Saved(brainId: Long) extends Response
 }
 
@@ -53,6 +55,22 @@ abstract class DBActor[D <: DBDriver]
       request.onFailure {
         case e: Throwable =>
           log.error(e, "Driver failed!")
+          requester ! MP.Fail(e)
+      }
+
+    case Traverse(startId, depth, limit, relations) =>
+      val requester = context.sender()
+      val request = Future { driver.traverse(startId, depth, limit, relations) }
+
+      request.onSuccess {
+        case dff =>
+          requester ! Traversed(dff)
+      }
+
+      request.onFailure {
+        case e: Throwable =>
+          log.error(e, "Driver failed!")
+          requester ! MP.Fail(e)
       }
 
     case _ =>

@@ -84,8 +84,6 @@ object DataFlowFormat {
 
 import DataFlowFormat._
 
-import scala.util.Try
-
 final case class DataFlowFormat(props: Map[String, Any], relations: Map[String, Set[Long]],
                                 nodes: IndexedSeq[Node], inputNodeId: Int, outputNodeId: Int) {
 
@@ -123,6 +121,10 @@ final case class DataFlowFormat(props: Map[String, Any], relations: Map[String, 
     } yield s"  -[$r]-> DataFlow($id)").mkString("\n")
 
     s"DataFlow {$propsRepr}:\n{$relationsRepr}:\n$nodesRepr"
+  }
+
+  def injection(propName: String, value: Any): DataFlowFormat = {
+    this.copy(props = props + (propName -> value))
   }
 
   def idInjection(id: Long): DataFlowFormat = {

@@ -37,8 +37,14 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
       } yield portConnections.size).sum
     }
 
+    /** Silly equation check */
     assert(edgesCount(dff) == edgesCount(loaded))
 
+    /** relations check */
+    assert(loaded.relations == dff.relations)
+
+    /** id injection check */
+    assert(loaded(DataFlowFormat.idProp) == id)
   }
 
   it must "be concurrent" in {
@@ -52,6 +58,28 @@ class Neo4JDriverTest(val driver: Neo4JDriver) extends FlatSpec with Matchers wi
     }
 
     println(s"Time: ${t.toDouble / 100} millisec per brain")
+  }
+
+  it must "traverse right" in {
+    val rootId = driver.save(dff)
+    val nodesNumber = 100
+    (0 until nodesNumber).foldLeft(rootId) { (parentId, _) =>
+      val genDff = dff.parentInjection(parentId)
+      driver.save(genDff)
+    }
+
+    val nodesLimit = 25
+    val depthLimit = 50
+    val traversed = driver.traverse(Some(rootId), depthLimit, nodesLimit, Seq(DataFlowFormat.parentRelation))
+    println(traversed)
+
+    // limit + input and output nodes
+    assert(traversed.nodes.size == nodesLimit + 2)
+
+    val fullTraversed = driver.traverse(Some(rootId), Int.MaxValue, Long.MaxValue, Seq(DataFlowFormat.parentRelation))
+
+    // nodes + root + input and output nodes
+    assert(fullTraversed.nodes.size == nodesNumber + 1 + 2)
   }
 }
 

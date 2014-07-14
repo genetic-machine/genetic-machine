@@ -5,20 +5,20 @@ import scala.math._
 import geneticmachine.labyrinth.{ Labyrinth, Point, CellStatus}
 
 object SimpleVision {
-  def apply(deep: Int) = new SimpleVision(deep)
+  def apply(depth: Int) = new SimpleVision(depth)
 }
 
-class SimpleVision(val deep: Int) extends Vision {
+class SimpleVision(val depth: Int) extends Vision {
   def apply(lab: Labyrinth, from: Point): Observation = {
-    val size = 2 * deep + 1
+    val size = 2 * depth + 1
     val visionMap = DenseMatrix.fill(size, size)(CellStatus.Unknown)
 
     for {
       x <- 0 until size
       y <- 0 until size
-      labX = x - deep + from.x
-      labY = y - deep + from.y
-      if abs(x - deep) + abs(y - deep) <= deep
+      labX = x - depth + from.x
+      labY = y - depth + from.y
+      if abs(x - depth) + abs(y - depth) <= depth
     } {
       visionMap(x, y) = if (Point(labX, labY).inBorders(lab.rows, lab.cols)) lab(labX, labY) else CellStatus.Unknown
     }
@@ -26,5 +26,5 @@ class SimpleVision(val deep: Int) extends Vision {
     Observation(visionMap, from)
   }
 
-  override def toString(): String = s"SimpleVision($deep)"
+  override def toString(): String = s"SimpleVision($depth)"
 }
