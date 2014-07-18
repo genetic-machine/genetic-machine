@@ -4,6 +4,8 @@
 
 Although, the current development goal is to implement and solve so called 'labyrinth' task - an abstract long-distance navigation task.
 
+Please, visit [wiki](https://github.com/ZloVechno/genetic-machine/wiki) to learn more.
+
 **Version 0.1 has been released!**
 
 ## In a few words
