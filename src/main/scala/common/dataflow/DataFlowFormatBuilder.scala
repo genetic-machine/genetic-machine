@@ -197,7 +197,7 @@ final class DataFlowFormatBuilder(label: String) {
   }
 
   def toDataFlowFormat: DataFlowFormat = {
-    val linearIndexes = nodes.keys.toVector
+    val linearIndexes = nodes.keys.toList
     val indexTransform = linearIndexes.zipWithIndex.toMap
 
     def portSetTransform(ports: mutable.Set[PortBuilder]): Set[Port] = {

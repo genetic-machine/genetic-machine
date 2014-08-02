@@ -12,7 +12,7 @@ object PickleDriver {
 
   object PickleDFF {
     def unapply(flow: PickleDFF): Option[DataFlowFormat] = {
-      Some(DataFlowFormat(flow.props, flow.relations, flow.nodes.toVector, flow.inputNodeId, flow.outputNodeId))
+      Some(DataFlowFormat(flow.props, flow.relations, flow.nodes, flow.inputNodeId, flow.outputNodeId))
     }
 
     def apply(dff: DataFlowFormat) = new PickleDFF(dff.props, dff.relations, dff.nodes.toList, dff.inputNodeId, dff.outputNodeId)

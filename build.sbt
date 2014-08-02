@@ -29,3 +29,5 @@ resolvers ++= Seq(
 libraryDependencies += "org.neo4j" % "neo4j" % "2.1.2"
 
 libraryDependencies += "org.scala-lang" % "scala-pickling_2.11" % "0.8.0"
+
+libraryDependencies += "com.github.romix.akka" %% "akka-kryo-serialization" % "0.3.2"

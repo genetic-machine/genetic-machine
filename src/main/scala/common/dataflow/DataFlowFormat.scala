@@ -50,6 +50,9 @@ object DataFlowFormat {
     val outputNode = flowBuilder.node("Output").asOutput()
     val errorNode = flowBuilder.node("Error")(errorCauseProp -> e.getStackTrace.mkString("\n"))
 
+    inputNode --> errorNode
+    errorNode --> outputNode
+
     flowBuilder.toDataFlowFormat
   }
 
@@ -85,7 +88,7 @@ object DataFlowFormat {
 import DataFlowFormat._
 
 final case class DataFlowFormat(props: Map[String, Any], relations: Map[String, Set[Long]],
-                                nodes: IndexedSeq[Node], inputNodeId: Int, outputNodeId: Int) {
+                                nodes: List[Node], inputNodeId: Int, outputNodeId: Int) {
 
   def apply(prop: String) = props(prop)
 
