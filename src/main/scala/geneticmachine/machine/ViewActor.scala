@@ -2,11 +2,7 @@ package geneticmachine.machine
 
 import akka.actor.{ActorRef, ActorLogging, Actor}
 import akka.pattern.ask
-import common.remote.PickledProtocol
 import scala.concurrent.duration._
-
-import scala.pickling._
-import binary._
 
 import common.ViewProtocol
 import common.dataflow.DataFlowFormat
@@ -20,14 +16,25 @@ object ViewActor {
   val traverseMaxLimit: Long = 250
 }
 
-class ViewActor(val dbActor: ActorRef) extends Actor with ActorLogging with PickledProtocol {
+class ViewActor(val dbActor: ActorRef) extends Actor with ActorLogging {
 
   import ViewActor._
-  log.info(s"\n\nView actor enabled $self\n\n")
+
+  import scala.pickling._
+  import binary._
 
   import context.dispatcher
 
-  def receive: Receive = pickledReceive {
+  def unpickled(r: Receive): Receive = {
+    case pickled: BinaryPickle =>
+      r(pickled.unpickle[Any])
+
+    // crush type borders...
+    case other =>
+      r(other)
+  }
+
+  def receive: Receive = unpickled {
     case ViewProtocol.GetDFF(id: Long) =>
       val requester = context.sender()
       val request = dbActor.ask(DBActor.Load(id))(dbTimeout)
