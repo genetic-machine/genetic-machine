@@ -1,6 +1,22 @@
+import com.typesafe.sbt.SbtNativePackager._
+import NativePackagerKeys._
+import com.typesafe.sbt.packager.archetypes.ServerLoader.{SystemV, Upstart}
+
 name := "genetic-machine"
 
 version := "1.0"
+
+packageArchetype.java_server
+
+maintainer in Linux := "Maxim Borisyak <Maxim.Borisyak at google.com>"
+
+packageSummary in Linux := "Genetic + Machine"
+
+packageDescription in Linux := "A long description of Genetic + Machine"
+
+rpmVendor := "MIPT"
+
+bashScriptConfigLocation := Some("${app_home}/../conf/jvm_opts")
 
 scalaVersion := "2.11.1"
 
