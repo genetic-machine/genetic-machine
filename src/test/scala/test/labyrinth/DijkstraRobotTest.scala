@@ -16,7 +16,7 @@ import geneticmachine.labyrinth._
 import geneticmachine.labyrinth.generators.LabyrinthGenerator
 import geneticmachine.labyrinth.generators.RandomWalkGenerator
 import geneticmachine.labyrinth.vision.{Vision, SimpleVision}
-import geneticmachine.Robot
+import geneticmachine.{RobotResult, Robot}
 
 import scala.util.Success
 
@@ -48,8 +48,8 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
 
       _system.actorOf(Props(new RobotBrainActor(labGen, vision)))
 
-      expectMsgPF(max = 3.second, "Timeout") {
-        case Robot.Finish(_, stats: LabyrinthStatus) =>
+      expectMsgPF(max = 5.second, "Timeout") {
+        case Robot.Finish(_, stats: RobotResult[LabyrinthStatus]) =>
         case msg =>
           throw new Exception(s"Bad receive: $msg")
       }
@@ -61,8 +61,8 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
 
       _system.actorOf(Props(new RobotBrainActor(labGen, vision)))
 
-      expectMsgPF(max = 3.second, "Timeout") {
-        case Robot.Finish(_, stats: LabyrinthStatus) =>
+      expectMsgPF(max = 5.second, "Timeout") {
+        case Robot.Finish(_, stats: RobotResult[LabyrinthStatus]) =>
         case msg =>
           throw new Exception(s"Bad receive: $msg")
       }
