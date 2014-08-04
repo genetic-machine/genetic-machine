@@ -1,6 +1,6 @@
 package geneticmachine.labyrinth
 
-import geneticmachine.{RobotFactory, Robot}
+import geneticmachine.{RobotFactory, Robot, Metric, ContinuousMetric}
 
 import akka.actor.{Props, ActorRef}
 
@@ -17,16 +17,20 @@ object LabyrinthRobot {
     val labGen = RandomWalkGenerator(3, 3)(Point(51, 51))
     val vision = SimpleVision(5)
     val feedback = ZeroFeedback
-    LabyrinthRobotFactory(labGen)(vision)(feedback)
+    val ms = List(metrics.CommandNumber)
+    val cms = List(metrics.ManhattanDistanceToTarget, metrics.EuclideanDistanceToTarget)
+    LabyrinthRobotFactory(labGen)(vision)(feedback)(ms)(cms)
   }
 }
 
 case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
                                 (vision: Vision)
                                 (feedbackStrategy: FeedbackStrategy)
+                                (metrics: List[Metric[LabyrinthStatus]])
+                                (continuousMetrics: List[ContinuousMetric[LabyrinthStatus]])
   extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthStatus] {
 
-  def props(brain: ActorRef) = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy)
+  def props(brain: ActorRef) = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy, metrics, continuousMetrics)
 
   override def toString: String = s"LabyrinthRobot($labGen, $vision, $feedbackStrategy)"
 }
