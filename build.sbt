@@ -16,8 +16,6 @@ packageDescription in Linux := "A long description of Genetic + Machine"
 
 rpmVendor := "MIPT"
 
-bashScriptConfigLocation := Some("${app_home}/../conf/jvm_opts")
-
 scalaVersion := "2.11.1"
 
 scalacOptions += "-feature"
