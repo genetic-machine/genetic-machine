@@ -82,14 +82,22 @@ class MirrorMachine(val mirroringSystemUrl: String = "GeneticMachine@127.0.0.1:7
   }
 }
 
-trait ViewMachine extends MirrorMachine {
-  import scala.pickling._
-  import binary._
+trait View {
 
   val askTimeout = 6.seconds
 
   val maxTraverseNodes = 1024
   val maxTraverseDepth = 1024
+
+  val relationTypes = Seq(DataFlowFormat.parentRelation, DataFlowFormat.experimentRelation)
+
+  def traverse(id: Option[Long]): Future[DataFlowFormat]
+  def dff(id: Long): Future[DataFlowFormat]
+}
+
+trait ViewClient extends MirrorMachine with View {
+  import scala.pickling._
+  import binary._
 
   def withRemote[T](action: (ActorRef) => Future[T]): Future[T] = {
     val viewSelection = system.actorSelection(s"akka.tcp://$mirroringSystemUrl/user/view")
@@ -121,5 +129,28 @@ trait ViewMachine extends MirrorMachine {
       pickled <- view.ask(req)(askTimeout).mapTo[BinaryPickle]
       ViewProtocol.DFF(dff) = pickled.unpickle[ViewProtocol.DFF]
     } yield dff
+  }
+}
+
+trait DirectView extends MachineDB with View {
+  import geneticmachine.db.DBActor
+
+  def dff(id: Long) = {
+    (for {
+      DBActor.Loaded(dff) <- dbActor.ask(DBActor.Load(id))(askTimeout)
+    } yield dff).recover {
+      case e: Throwable =>
+        DataFlowFormat.errorDff("Error", e)
+    }
+  }
+
+  def traverse(id: Option[Long]) = {
+    val req = DBActor.Traverse(id, maxTraverseNodes, maxTraverseDepth, relationTypes)
+    (for {
+      DBActor.Traversed(dff) <- dbActor.ask(req)(askTimeout)
+    } yield dff).recover {
+      case e: Throwable =>
+        DataFlowFormat.errorDff("Error", e)
+    }
   }
 }
