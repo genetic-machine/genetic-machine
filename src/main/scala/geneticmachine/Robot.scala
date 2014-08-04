@@ -10,11 +10,10 @@ import scala.reflect.ClassTag
 import akka.util.Timeout
 import scala.concurrent.duration._
 
-
 object Robot {
   import MessageProtocol._
 
-  case class Finish[+StatusT : ClassTag](brain: ActorRef, status: StatusT) extends Response
+  case class Finish[+StatusT : ClassTag](brain: ActorRef, result: RobotResult[StatusT]) extends Response
 }
 
 trait RobotFactory[I, O, F, +S] extends Serializable {
@@ -24,6 +23,10 @@ trait RobotFactory[I, O, F, +S] extends Serializable {
 
   def props(brain: ActorRef): Props
 }
+
+case class RobotResult[+StateT : ClassTag](worldState: StateT,
+                                           metrics: Map[String, Double],
+                                           continuousMetrics: Map[String, Seq[Double]])
 
 /**
  * Provides shell for correct [[geneticmachine.Brain]] activity.
@@ -35,9 +38,10 @@ trait RobotFactory[I, O, F, +S] extends Serializable {
  *
  *@param brain brain to guide.
  */
-abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
-                     OutputT : ClassTag, FeedbackT : ClassTag]
-  (val brain: ActorRef) extends Actor with ActorLogging {
+abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, FeedbackT : ClassTag]
+  (val brain: ActorRef, val metrics: List[Metric[StateT]],
+   val continuousMetrics: List[ContinuousMetric[StateT]])
+    extends Actor with ActorLogging {
 
   import context.dispatcher
 
@@ -61,7 +65,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * Robot's initialisation.
    * @return initial status and initial brain's input.
    */
-  def init: (StatusT, InputT)
+  def init: Future[(StateT, InputT)]
 
   /**
    * The "physics" of the location.
@@ -71,7 +75,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * @param brainOutput brain's response
    * @return Some(), that includes new robot's status and new brain's input, if goal is not achieved, otherwise None
    */
-  def process(status: StatusT, brainOutput: OutputT): Future[(StatusT, Option[InputT])]
+  def process(status: StateT, brainOutput: OutputT): Future[(StateT, Option[InputT])]
 
   /**
    * The supervisor's function.
@@ -79,25 +83,50 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * @param status current status of robot and environment
    * @param brainOutput brain's response
    */
-  def feedback(status: StatusT, brainOutput: OutputT): Future[FeedbackT]
+  def feedback(status: StateT, brainOutput: OutputT): Future[FeedbackT]
 
-  def serialize(status: StatusT): Future[DataFlowFormat]
+  def serialize(status: StateT): Future[DataFlowFormat]
 
-  final def waitBrain(status: StatusT, brainResponse: OutputT): Receive = {
+  def addMetrics(dff: DataFlowFormat, result: RobotResult[StateT]): DataFlowFormat = {
+    val metricProps: Map[String, Any] =
+      (for {
+        (metricName, value: Double) <- result.metrics
+      } yield (s"#$metricName", value)) ++
+      (for {
+        (metricName, value: Seq[Double]) <- result.continuousMetrics
+      } yield (s"#$metricName", value.toArray))
+
+    dff.copy(dff.props ++ metricProps)
+  }
+
+  final def finalize(state: StateT): RobotResult[StateT] = {
+    val metricsValues = metrics.par.map { m =>
+      (m.metricName, m(state))
+    }.seq.toMap
+
+    val continuousMetricsValues = continuousMetrics.par.map { m =>
+      (m.metricName, m(state))
+    }.seq.toMap
+
+    RobotResult(state, metricsValues, continuousMetricsValues)
+  }
+
+  final def waitBrain(status: StateT, brainResponse: OutputT): Receive = {
     case MessageProtocol.Ready if sender() == brain =>
       val state = process(status, brainResponse)
 
       state.onSuccess {
-        case (newStatus: StatusT, Some(inputData: InputT)) =>
+        case (newStatus: StateT, Some(inputData: InputT)) =>
           context.become(scoreBrain(newStatus), discardOld = true)
           brain ! Brain.Input (inputData)
 
-        case (newStatus: StatusT, None) =>
-          context.become(finish(newStatus))
+        case (newStatus: StateT, None) =>
+          val result = finalize(newStatus)
+          context.become(finish(result))
 
           (brain ? Brain.Reset).onComplete {
             case Success(MessageProtocol.Ready) =>
-              context.parent ! Robot.Finish(brain, newStatus)
+              context.parent ! Robot.Finish(brain, result)
 
             case Failure(e) =>
               failure(e)
@@ -122,7 +151,7 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
    * Processes brain outputs.
    * @param status current status of robot and environment.
    */
-  final def scoreBrain(status: StatusT): Receive = {
+  final def scoreBrain(status: StateT): Receive = {
     case Brain.Output(brainOutput: OutputT) =>
       val score = feedback(status, brainOutput)
 
@@ -142,14 +171,14 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
       unexpectedResponse[OutputT](s"Action expectation", msg)
   }
 
-  final def finish(status: StatusT): Receive = {
+  final def finish(result: RobotResult[StateT]): Receive = {
     case MessageProtocol.Serialize =>
       val requester = context.sender()
-      val serialization = serialize(status)
+      val serialization = serialize(result.worldState)
 
       serialization.onSuccess {
         case dff =>
-          requester ! MessageProtocol.Serialized(dff)
+          requester ! MessageProtocol.Serialized(addMetrics(dff, result))
       }
 
       serialization.onFailure {
@@ -158,9 +187,16 @@ abstract class Robot[InputT : ClassTag, StatusT : ClassTag,
       }
   }
 
-  final val receive: Receive = {
-    val (status, input) = init
-    brain ! Brain.Input(input)
-    scoreBrain(status)
+  init.onComplete {
+    case Success((state, input)) =>
+      brain ! Brain.Input(input)
+      context.become(scoreBrain(state))
+
+    case Failure(e: Throwable) =>
+      failure(e)
+  }
+
+  final def receive: Receive = {
+    case _ =>
   }
 }

@@ -33,11 +33,11 @@ case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
 
 class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
                      val vision: Vision, val feedbackStrategy: FeedbackStrategy)
-  extends Robot[LabyrinthInput, LabyrinthStatus, LabyrinthCommand.LabyrinthCommand, LabyrinthFeedback](brain) {
+  extends Robot[LabyrinthInput, LabyrinthStatus, LabyrinthCommand.LabyrinthCommand, LabyrinthFeedback](brain, List.empty, List.empty) {
 
   import context.dispatcher
 
-  override def init = {
+  override def init = Future.successful {
     val (lab, start, goal) = labyrinthGen()
 
     val obs = vision(lab, start)
