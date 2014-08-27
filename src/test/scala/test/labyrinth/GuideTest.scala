@@ -5,6 +5,7 @@ import akka.testkit.{ImplicitSender, TestKit}
 import common.MessageProtocol
 import geneticmachine.Guide
 import geneticmachine.db.Neo4JActor
+import geneticmachine.labyrinth.brain.DijkstraBrain
 import org.scalatest._
 import geneticmachine.labyrinth._
 import test._

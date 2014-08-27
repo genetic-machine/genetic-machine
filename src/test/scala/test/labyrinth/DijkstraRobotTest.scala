@@ -5,6 +5,7 @@ import akka.testkit.TestKit
 import akka.pattern.ask
 
 import common.MessageProtocol
+import geneticmachine.labyrinth.brain.DijkstraBrain
 import geneticmachine.labyrinth.feedback.ZeroFeedback
 import org.scalatest.WordSpecLike
 import org.scalatest.Matchers
@@ -48,7 +49,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
 
       _system.actorOf(Props(new RobotBrainActor(labGen, vision)))
 
-      expectMsgPF(max = 5.second, "Timeout") {
+      expectMsgPF(max = 10.second, "Timeout") {
         case Robot.Finish(_, stats: RobotResult[LabyrinthStatus]) =>
         case msg =>
           throw new Exception(s"Bad receive: $msg")
@@ -61,7 +62,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
 
       _system.actorOf(Props(new RobotBrainActor(labGen, vision)))
 
-      expectMsgPF(max = 5.second, "Timeout") {
+      expectMsgPF(max = 10.second, "Timeout") {
         case Robot.Finish(_, stats: RobotResult[LabyrinthStatus]) =>
         case msg =>
           throw new Exception(s"Bad receive: $msg")

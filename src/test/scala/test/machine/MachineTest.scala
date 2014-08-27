@@ -2,7 +2,8 @@ package test.machine
 
 import akka.actor.ActorRef
 import common.ViewProtocol
-import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain}
+import geneticmachine.labyrinth.LabyrinthRobot
+import geneticmachine.labyrinth.brain.DijkstraBrain
 import org.scalatest.{FlatSpec, BeforeAndAfterAll, Matchers}
 import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._

@@ -1,10 +1,11 @@
-package geneticmachine.labyrinth
+package geneticmachine.labyrinth.brain
 
 import akka.actor.Props
-import geneticmachine.{BrainFactory, Brain}
-import LabyrinthCommand.LabyrinthCommand
-import common.dataflow.{DataFlowFormatBuilder, DataFlowFormat}
 import common.dataflow.DataFlowFormat._
+import common.dataflow.{DataFlowFormat, DataFlowFormatBuilder}
+import geneticmachine.labyrinth.LabyrinthCommand.LabyrinthCommand
+import geneticmachine.labyrinth._
+import geneticmachine.{Brain, BrainFactory}
 
 import scala.concurrent.Future
 
@@ -36,7 +37,7 @@ class DijkstraBrain(dff: DataFlowFormat)
     DijkstraBrain.empty
   }
 
-  override def init(dff: DataFlowFormat): Integer = 0
+  override def init: Future[Integer] = Future.successful { 0: Integer }
 
   override def input(stepCounter: Integer, data: LabyrinthInput): Future[(Integer, LabyrinthCommand)] = Future {
     val (command, _) = strictMinPathSensor(data).max(Ordering by { x: (LabyrinthCommand.LabyrinthCommand, Double) => x._2 })

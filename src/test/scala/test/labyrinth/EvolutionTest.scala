@@ -6,7 +6,8 @@ import common.MessageProtocol
 import geneticmachine.Experiment._
 import geneticmachine.ExperimentActor
 import geneticmachine.db.Neo4JActor
-import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain, LabyrinthStatus}
+import geneticmachine.labyrinth.brain.DijkstraBrain
+import geneticmachine.labyrinth.{LabyrinthRobot, LabyrinthStatus}
 import org.scalatest._
 import akka.pattern.ask
 import scala.concurrent.Await

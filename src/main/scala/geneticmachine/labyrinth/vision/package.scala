@@ -25,4 +25,6 @@ package object vision {
       lab
     }
   }
+
+  type Pattern = (Observation) => Double
 }
