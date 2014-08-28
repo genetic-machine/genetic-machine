@@ -26,9 +26,9 @@ object LabyrinthRobot {
 case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
                                 (vision: Vision)
                                 (feedbackStrategy: FeedbackStrategy)
-                                (metrics: List[Metric[LabyrinthStatus]])
-                                (continuousMetrics: List[ContinuousMetric[LabyrinthStatus]])
-  extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthStatus] {
+                                (metrics: List[Metric[LabyrinthState]])
+                                (continuousMetrics: List[ContinuousMetric[LabyrinthState]])
+  extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthState] {
 
   def props(brain: ActorRef) = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy, metrics, continuousMetrics)
 
@@ -36,8 +36,10 @@ case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
 }
 
 class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
-                     val vision: Vision, val feedbackStrategy: FeedbackStrategy)
-  extends Robot[LabyrinthInput, LabyrinthStatus, LabyrinthCommand.LabyrinthCommand, LabyrinthFeedback](brain, List.empty, List.empty) {
+                     val vision: Vision, val feedbackStrategy: FeedbackStrategy,
+                     metrics: List[Metric[LabyrinthState]],
+                     continuousMetrics: List[ContinuousMetric[LabyrinthState]])
+  extends Robot[LabyrinthInput, LabyrinthState, LabyrinthCommand.LabyrinthCommand, LabyrinthFeedback](brain, metrics, continuousMetrics) {
 
   import context.dispatcher
 
@@ -50,12 +52,12 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
     val path = List(start)
     val history = List()
 
-    val status = LabyrinthStatus(visionMap, lab, start, Direction.North, goal, path, history)
+    val status = LabyrinthState(visionMap, lab, start, Direction.North, goal, path, history)
     val initialInput = LabyrinthInput(visionMap, start, Direction.North, goal)
-    (status, initialInput)
+    (status, Some(initialInput))
   }
 
-  def process(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
+  def process(status: LabyrinthState, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
     val (newPosition, newDirection) = brainOutput match {
       case LabyrinthCommand.Forward if (status.robotPosition + status.robotDirection).inLabyrinth(status.labyrinth) =>
         (status.robotPosition + status.robotDirection, status.robotDirection)
@@ -71,17 +73,17 @@ class LabyrinthRobot(brain: ActorRef, val labyrinthGen: LabyrinthGenerator,
     val history = brainOutput :: status.history
     val obs = vision(status.labyrinth, newPosition)
     obs.impose(status.visionMap)
-    val newStatus = LabyrinthStatus(status.visionMap, status.labyrinth, newPosition, newDirection, status.goal, path, history)
+    val newStatus = LabyrinthState(status.visionMap, status.labyrinth, newPosition, newDirection, status.goal, path, history)
     val newInput = LabyrinthInput(status.visionMap, newPosition, newDirection, status.goal)
 
     (newStatus, if (newPosition == status.goal) None else Some(newInput))
   }
 
-  override def feedback(status: LabyrinthStatus, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
+  override def feedback(status: LabyrinthState, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
     feedbackStrategy(status, brainOutput)
   }
 
-  override def serialize(status: LabyrinthStatus): Future[DataFlowFormat] = Future.successful {
+  override def serialize(status: LabyrinthState): Future[DataFlowFormat] = Future.successful {
     val builder = DataFlowFormatBuilder(robotLabel)
 
     val input = builder.node("RobotInput").asInput()

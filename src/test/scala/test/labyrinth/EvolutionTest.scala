@@ -7,7 +7,7 @@ import geneticmachine.Experiment._
 import geneticmachine.ExperimentActor
 import geneticmachine.db.Neo4JActor
 import geneticmachine.labyrinth.brain.DijkstraBrain
-import geneticmachine.labyrinth.{LabyrinthRobot, LabyrinthStatus}
+import geneticmachine.labyrinth.{LabyrinthRobot, LabyrinthState}
 import org.scalatest._
 import akka.pattern.ask
 import scala.concurrent.Await
@@ -39,7 +39,7 @@ class EvolutionTest(_system: ActorSystem) extends TestKit(_system)
 
       val eActor = _system.actorOf(Props(new ExperimentActor(experiment, dbActor)), "Experiment")
       Await.result(eActor.ask(MessageProtocol.Init)(60.seconds), 62.seconds) match {
-        case ExperimentActor.ExperimentResult(rs: List[(Try[LabyrinthStatus], Try[Long])]) =>
+        case ExperimentActor.ExperimentResult(rs: List[(Try[LabyrinthState], Try[Long])]) =>
           println(s"Results:\n${rs.mkString("\n")}")
           assert (rs.forall { (r) => r._1.isSuccess })
 

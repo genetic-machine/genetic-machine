@@ -3,7 +3,7 @@ package geneticmachine.labyrinth.feedback
 import geneticmachine.labyrinth._
 
 object ZeroFeedback extends FeedbackStrategy {
-  def apply(status: LabyrinthStatus, action: LabyrinthCommand.LabyrinthCommand): LabyrinthFeedback = {
+  def apply(status: LabyrinthState, action: LabyrinthCommand.LabyrinthCommand): LabyrinthFeedback = {
     LabyrinthFeedback(0.0)
   }
 

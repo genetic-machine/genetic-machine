@@ -15,22 +15,11 @@ object Brain {
 
   import MP._
 
-  private case class Init[StateT : ClassTag](state: StateT) extends Request
-
-  private case class InputProcessDone [OutputT : ClassTag, StateT : ClassTag]
-    (state: StateT, output: OutputT) extends Response
-
-  private case class FeedbackDone[StateT : ClassTag](state: StateT) extends Response
-  private case class ResetDone[StateT : ClassTag](state: StateT) extends Response
-  private case object SerializationDone extends Response
-
   case class Input[InputT : ClassTag](data: InputT) extends Request
   case class Output[OutputT : ClassTag](data: OutputT) extends Response
   case class Feedback[FeedbackT : ClassTag](data: FeedbackT) extends Request
 
   case object Reset extends Request
-
-  //def props[T <: Brain](dff: DataFlowFormat): Props = Props(Class[T], dff)
 }
 
 trait BrainFactory[I, O, F] extends Serializable {
@@ -84,12 +73,19 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
 
   import context.dispatcher
 
+  private case class Init(state: StateT)
+
+  private case class InputProcessDone(state: StateT, output: OutputT)
+
+  private case class FeedbackDone(state: StateT)
+  private case class ResetDone(state: StateT)
+
   /**
    * Returns initial state of actor by provided DFF description.
    * Brain must be able to handle Input requests right after the initialization.
    * Not in future just for convinience of not handling the race during deferred initialization.
    */
-  def init: Future[StateT]
+  protected def init: Future[StateT]
 
   /**
    * Processes input data.
@@ -97,7 +93,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
    * @param inputData incoming data.
    * @return the pair of new brain's state and response.
    */
-  def input(state: StateT, inputData: InputT): Future[(StateT, OutputT)]
+  protected def input(state: StateT, inputData: InputT): Future[(StateT, OutputT)]
 
   /**
    * Processess feedback of previous output.
@@ -107,7 +103,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
    * @param feedbackData feedback data.
    * @return new brain's state.
    */
-  def feedback(state: StateT, feedbackData: FeedbackT): Future[StateT]
+  protected def feedback(state: StateT, feedbackData: FeedbackT): Future[StateT]
 
   /**
    * Inner memory reset procedure.
@@ -123,91 +119,95 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
    * @param state current state.
    * @return new clean state.
    */
-  def reset(state: StateT): Future[StateT]
+  protected def reset(state: StateT): Future[StateT]
 
   /**
    * Saves current state into [[common.dataflow.DataFlowFormat]].
    * @param state current state.
    * @return serialazed state.
    */
-  def serialize(state: StateT): Future[DataFlowFormat]
+  protected def serialize(state: StateT): Future[DataFlowFormat]
 
-  final def stashReceive: Receive = {
+  private final def stashReceive: Receive = {
     case msg =>
-      log.debug(s"Stash normally shouldn't be invoked! [${msg.toString.take(50)}]")
+      log.debug(s"Normally stash shouldn't be invoked! [${msg.toString.take(50)}]")
       stash()
   }
 
-  final def failureReceive(requester: ActorRef, currentState: StateT): Receive = {
+  private final def failureReceive(activity: String)(requester: ActorRef, currentState: StateT): Receive = {
     case akka.actor.Status.Failure(e: Throwable) =>
-      log.error(s"A main activity has been failed! [$e]")
+      log.error(s"Main activity ($activity) has been failed! [$e]")
       requester ! MP.Fail(e)
       context.become(process(currentState))
       unstashAll()
   }
 
-  final def processingOutput(requester: ActorRef): Receive = {
-    case Brain.InputProcessDone(updatedState: StateT, outData: OutputT) =>
-      log.debug("Output done.")
+  private final def processingOutput(requester: ActorRef): Receive = {
+    case InputProcessDone(updatedState: StateT, outData: OutputT) =>
+      log.debug("Output has been done.")
       requester ! Brain.Output(outData)
       context.become(process(updatedState))
       unstashAll()
   }
 
-  final def processingFeedback(requester: ActorRef): Receive = {
-    case Brain.FeedbackDone(updatedState: StateT) =>
-      log.debug("Feedback done.")
+  private final def processingFeedback(requester: ActorRef): Receive = {
+    case FeedbackDone(updatedState: StateT) =>
+      log.debug("Feedback has been done.")
       requester ! MP.Ready
       context.become(process(updatedState))
       unstashAll()
   }
 
-  final def resetting(requester: ActorRef): Receive = {
-    case Brain.ResetDone(updatedState: StateT) =>
-      log.debug("Reset done.")
+  private final def resetting(requester: ActorRef): Receive = {
+    case ResetDone(updatedState: StateT) =>
+      log.debug("Reset has been done.")
       requester ! MP.Ready
       context.become(process(updatedState))
       unstashAll()
   }
 
-  final def process(state: StateT): Receive = {
+  private final def process(state: StateT): Receive = {
     case Brain.Input(inData: InputT) =>
-      log.debug(s"Input.")
+      log.debug(s"Input has been received: ${inData.toString.take(30)}")
 
       (for {
         (updatedState: StateT, output: OutputT) <- input(state, inData)
-      } yield Brain.InputProcessDone(updatedState, output)) pipeTo self
+      } yield InputProcessDone(updatedState, output)) pipeTo self
 
       context.become {
-        processingOutput(context.sender()) orElse failureReceive(context.sender(), state) orElse stashReceive
+        processingOutput(context.sender()) orElse
+          failureReceive("processing output")(context.sender(), state) orElse
+          stashReceive
       }
 
     case Brain.Feedback(data: FeedbackT) =>
-      log.debug(s"Feedback.")
-      val response = feedback(state, data)
+      log.debug(s"Feedback has been received: ${data.toString.take(30)}")
 
       (for {
-        updatedState <- response
-      } yield Brain.FeedbackDone(updatedState)) pipeTo self
+        updatedState <- feedback(state, data)
+      } yield FeedbackDone(updatedState)) pipeTo self
 
       context.become {
-        processingFeedback(context.sender()) orElse failureReceive(context.sender(), state) orElse stashReceive
+        processingFeedback(context.sender()) orElse
+          failureReceive("processing feedback")(context.sender(), state) orElse
+          stashReceive
       }
 
     case Brain.Reset =>
-      log.debug(s"Reset")
-      val response = reset(state)
+      log.debug(s"Reset has been received.")
 
       (for {
-        updatedState <- response
-      } yield Brain.ResetDone(updatedState)) pipeTo self
+        updatedState <- reset(state)
+      } yield ResetDone(updatedState)) pipeTo self
 
       context.become {
-        resetting(context.sender()) orElse failureReceive(context.sender(), state) orElse stashReceive
+        resetting(context.sender()) orElse
+          failureReceive("resetting")(context.sender(), state) orElse
+          stashReceive
       }
 
     case MP.Serialize =>
-      log.debug(s"Serialize")
+      log.debug(s"Serialize has been received.")
       (for {
         dff <- serialize(state)
       } yield MP.Serialized(dff)) recover {
@@ -216,35 +216,38 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
       } pipeTo context.sender()
   }
 
-  final def initialization() {
+  private final def initialization() {
     (for {
       state <- init
-    } yield Brain.Init(state)) recover {
+    } yield Init(state)) recover {
       case e: Throwable =>
-        MP.Fail(e)
+        MP.InitializationFailed(e)
     } pipeTo self
   }
 
   final val receive: Receive = {
-    case Brain.Init(state: StateT) =>
+    case Init(state: StateT) =>
       log.debug(s"Initialization successful!")
-      context.become(process(state))
+      context.become (process(state))
       unstashAll()
 
-    case MP.Fail(e: Throwable) =>
-      context.become(badInitialized)
+    case MP.InitializationFailed(e: Throwable) =>
+      context.become(badlyInitialized(e))
       log.error(s"Initialization failed! [$e]")
       unstashAll()
 
     case msg =>
+      /** Due to race condition during initialization, stash here is normal. */
       log.debug("Stash before initialization.")
       stash()
   }
 
-  final def badInitialized: Receive = {
+  private final def badlyInitialized(e: Throwable): Receive = {
     case msg =>
       context.sender() ! MP.Fail {
-        MP.InitializationFailure(new Exception(s"Initialization failed! [$msg]"))
+        MP.InitializationFailure {
+          new Exception(s"Brain has failed initialization!", e)
+        }
       }
   }
 

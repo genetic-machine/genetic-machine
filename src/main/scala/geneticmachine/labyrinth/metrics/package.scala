@@ -4,11 +4,11 @@ import geneticmachine.{ Metric, ContinuousMetric }
 
 package object metrics {
 
-  type LabyrinthMetric = Metric[LabyrinthStatus]
-  type ContinuousLabyrinthMetric = ContinuousMetric[LabyrinthStatus]
+  type LabyrinthMetric = Metric[LabyrinthState]
+  type ContinuousLabyrinthMetric = ContinuousMetric[LabyrinthState]
 
   object ManhattanDistanceToTarget extends ContinuousLabyrinthMetric("ManhattanDistance") {
-    def apply(state: LabyrinthStatus): Seq[Double] = {
+    def apply(state: LabyrinthState): Seq[Double] = {
       val target = state.goal
       state.path.map { p =>
         (p - target).l1Norm.toDouble
@@ -17,7 +17,7 @@ package object metrics {
   }
 
   object EuclideanDistanceToTarget extends ContinuousLabyrinthMetric("EuclideanDistance") {
-    def apply(state: LabyrinthStatus): Seq[Double] = {
+    def apply(state: LabyrinthState): Seq[Double] = {
       val target = state.goal
       state.path.map { p =>
         (p - target).l2Norm
@@ -26,7 +26,7 @@ package object metrics {
   }
 
   object CommandNumber extends LabyrinthMetric("Commands") {
-    def apply(state: LabyrinthStatus): Double = {
+    def apply(state: LabyrinthState): Double = {
       state.history.size.toDouble
     }
   }

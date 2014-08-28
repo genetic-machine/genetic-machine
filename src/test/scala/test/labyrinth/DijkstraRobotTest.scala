@@ -32,7 +32,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
 
   class RobotBrainActor(val labGen: LabyrinthGenerator, val vision: Vision) extends Actor {
     val brain = context.actorOf(Props(new DijkstraBrain(DijkstraBrain.empty)))
-    val robot = context.actorOf(Props(new LabyrinthRobot(brain, labGen, vision, ZeroFeedback)))
+    val robot = context.actorOf(Props(new LabyrinthRobot(brain, labGen, vision, ZeroFeedback, Nil, Nil)))
 
     override def receive: Receive = wait(robot)
 
@@ -50,7 +50,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
       _system.actorOf(Props(new RobotBrainActor(labGen, vision)))
 
       expectMsgPF(max = 10.second, "Timeout") {
-        case Robot.Finish(_, stats: RobotResult[LabyrinthStatus]) =>
+        case Robot.Finish(_, stats: RobotResult[LabyrinthState]) =>
         case msg =>
           throw new Exception(s"Bad receive: $msg")
       }
@@ -63,7 +63,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
       _system.actorOf(Props(new RobotBrainActor(labGen, vision)))
 
       expectMsgPF(max = 10.second, "Timeout") {
-        case Robot.Finish(_, stats: RobotResult[LabyrinthStatus]) =>
+        case Robot.Finish(_, stats: RobotResult[LabyrinthState]) =>
         case msg =>
           throw new Exception(s"Bad receive: $msg")
       }

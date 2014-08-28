@@ -6,7 +6,7 @@ object Metric {
   }
 }
 
-abstract class Metric[-T](val metricName: String) extends ((T) => Double)
+abstract class Metric[-T](val metricName: String) extends ((T) => Double) with Serializable
 
 
 object ContinuousMetric {
@@ -15,4 +15,4 @@ object ContinuousMetric {
   }
 }
 
-abstract class ContinuousMetric[-T](val metricName: String) extends ((T) => Seq[Double])
+abstract class ContinuousMetric[-T](val metricName: String) extends ((T) => Seq[Double]) with Serializable

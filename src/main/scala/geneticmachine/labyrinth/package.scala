@@ -219,7 +219,7 @@ package object labyrinth {
 
   case class LabyrinthInput(lab: Labyrinth, robotPosition: Point, robotDirection: Direction, goal: Point)
 
-  case class LabyrinthStatus(visionMap: Labyrinth, labyrinth: Labyrinth,
+  case class LabyrinthState(visionMap: Labyrinth, labyrinth: Labyrinth,
                              robotPosition: Point, robotDirection: Direction.Direction,
                              goal: Point, path: Path, history: List[LabyrinthCommand.LabyrinthCommand]) {
 
