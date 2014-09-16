@@ -30,7 +30,7 @@ case class LabyrinthRobotFactory(labGen: LabyrinthGenerator)
                                 (continuousMetrics: List[ContinuousMetric[LabyrinthState]])
   extends RobotFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, LabyrinthState] {
 
-  def props(brain: ActorRef) = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy, metrics, continuousMetrics)
+  def props(brain: ActorRef): Props = Props(classOf[LabyrinthRobot], brain, labGen, vision, feedbackStrategy, metrics, continuousMetrics)
 
   override def toString: String = s"LabyrinthRobot($labGen, $vision, $feedbackStrategy)"
 }

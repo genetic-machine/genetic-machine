@@ -40,8 +40,7 @@ case class RobotResult[+StateT : ClassTag]
  *@param brain brain to guide.
  */
 abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, FeedbackT : ClassTag]
-  (val brain: ActorRef, val metrics: List[Metric[StateT]],
-   val continuousMetrics: List[ContinuousMetric[StateT]])
+  (val brain: ActorRef, val metrics: List[Metric[StateT]], val continuousMetrics: List[ContinuousMetric[StateT]])
     extends Actor with ActorLogging with Stash {
 
 

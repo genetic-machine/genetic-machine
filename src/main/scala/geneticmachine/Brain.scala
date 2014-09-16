@@ -68,7 +68,8 @@ trait BrainFactory[I, O, F] extends Serializable {
  * @tparam StateT type of inner state.
  */
 abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
-                     FeedbackT : ClassTag, StateT : ClassTag](val dff: DataFlowFormat)
+                     FeedbackT : ClassTag, StateT : ClassTag]
+    (val dff: DataFlowFormat)
   extends Actor with ActorLogging with Stash {
 
   import context.dispatcher

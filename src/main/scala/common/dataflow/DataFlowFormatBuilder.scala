@@ -3,6 +3,7 @@ package common.dataflow
 import DataFlowFormat._
 
 import scala.collection.mutable
+import scala.collection.mutable.{ Set => MutableSet }
 
 object DataFlowFormatBuilder {
 
@@ -64,6 +65,11 @@ object DataFlowFormatBuilder {
       this
     }
 
+    def apply(props: Map[String, Any]): NodeRef = {
+      parent.nodes(nodeId).props ++= props
+      this
+    }
+
     def withType(nodeType: String): NodeRef = {
       apply(typeProp -> nodeType)
     }
@@ -94,8 +100,8 @@ import DataFlowFormatBuilder._
 final class DataFlowFormatBuilder(label: String) {
   private var lastIndex: Long = 0
 
-  private val nodes: mutable.Map[Long, NodeBuilder] = mutable.LongMap.empty[NodeBuilder]
-  private val edges: mutable.Map[Long, Array[mutable.Set[PortBuilder]]] = mutable.LongMap.empty[Array[mutable.Set[PortBuilder]]]
+  private val nodes: mutable.Map[Long, NodeBuilder] = mutable.HashMap.empty[Long, NodeBuilder]
+  private val edges: mutable.Map[Long, Array[mutable.Set[PortBuilder]]] = mutable.HashMap.empty[Long, Array[mutable.Set[PortBuilder]]]
   private val relations: mutable.Map[String, Set[Long]] = mutable.Map.empty[String, Set[Long]]
 
   private val props: mutable.Map[String, Any] = mutable.Map[String, Any](labelProp -> label)
@@ -209,7 +215,7 @@ final class DataFlowFormatBuilder(label: String) {
 
     val nodeSeq = for {
       index: Long <- linearIndexes
-      edgesByPorts: Array[mutable.Set[PortBuilder]] = edges(index)
+      edgesByPorts: Array[MutableSet[PortBuilder]] = edges(index)
       linearEdges: Array[Set[Port]] = for { ports <- edgesByPorts } yield portSetTransform(ports)
       nodeBuilder = nodes(index)
     } yield nodeBuilder.toNode(linearEdges)

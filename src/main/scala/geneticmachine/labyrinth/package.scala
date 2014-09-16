@@ -1,8 +1,11 @@
 package geneticmachine
 
 import breeze.linalg.DenseMatrix
+import common.dataflow.DataFlowFormat
 import scala.math._
 import scala.Ordering
+import scala.reflect.ClassTag
+import geneticmachine.labyrinth.vision._
 
 package object labyrinth {
 
@@ -18,20 +21,26 @@ package object labyrinth {
 
   type Labyrinth = DenseMatrix[CellStatus]
 
+  def matrixToArray[A : ClassTag](m: DenseMatrix[A]): (Array[A], Int, Int) = {
+    val flatMatrix = for {
+      row <- 0 until m.rows
+      col <- 0 until m.cols
+    } yield m(row, col)
+
+    (flatMatrix.toArray, m.rows, m.cols)
+  }
+
+  def matrixFromArray[A](array: Array[A], rows: Int, cols: Int): DenseMatrix[A] = {
+    new DenseMatrix[A](rows, cols, array, 0)
+  }
+
   object Labyrinth {
     def apply(rows: Int, cols: Int) = unknown(rows, cols)
     def unknown(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Unknown)
     def occupied(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Occupied)
     def free(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Free)
 
-    def toArray(lab: Labyrinth): (Array[CellStatus], Int, Int) = {
-      val labRepr = for {
-        row <- 0 until lab.rows
-        col <- 0 until lab.cols
-      } yield lab(row, col)
-
-      (labRepr.toArray, lab.rows, lab.cols)
-    }
+    def toArray(lab: Labyrinth): (Array[CellStatus], Int, Int) = matrixToArray(lab)
   }
 
   type CostMap = DenseMatrix[Int]
@@ -216,8 +225,9 @@ package object labyrinth {
     }
   }
 
-
-  case class LabyrinthInput(lab: Labyrinth, robotPosition: Point, robotDirection: Direction, goal: Point)
+  case class LabyrinthInput(lab: Labyrinth, robotPosition: Point, robotDirection: Direction, goal: Point) {
+    def observation: Observation = Observation(lab, robotPosition).turn(robotDirection)
+  }
 
   case class LabyrinthState(visionMap: Labyrinth, labyrinth: Labyrinth,
                              robotPosition: Point, robotDirection: Direction.Direction,
@@ -254,4 +264,7 @@ package object labyrinth {
   type LabyrinthOutput = LabyrinthCommand.LabyrinthCommand
 
   case class LabyrinthFeedback(value: Double)
+
+  abstract class LabyrinthBrain[StateT : ClassTag](dff: DataFlowFormat) extends
+    Brain[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, StateT](dff)
 }

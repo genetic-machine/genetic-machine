@@ -24,6 +24,50 @@ package object vision {
 
       lab
     }
+
+    def turnNorth = this
+    def turnEast: Observation = {
+      val map = Labyrinth.unknown(visionMap.cols, visionMap.rows)
+      for {
+        row <- 0 until visionMap.rows
+        col <- 0 until visionMap.cols
+      } {
+        map(col, row) = visionMap(row, col)
+      }
+
+      Observation(map, from.turnRight)
+    }
+
+    def turnWest: Observation = {
+      val map = Labyrinth.unknown(visionMap.cols, visionMap.rows)
+      for {
+        row <- 0 until visionMap.rows
+        col <- 0 until visionMap.cols
+      } {
+        map(visionMap.cols - col, row) = visionMap(row, col)
+      }
+
+      Observation(map, from.turnLeft)
+    }
+
+    def turnSouth: Observation = {
+      val map = Labyrinth.unknown(visionMap.rows, visionMap.cols)
+      for {
+        row <- 0 until visionMap.rows
+        col <- 0 until visionMap.cols
+      } {
+        map(row, col) = visionMap(row, col)
+      }
+
+      Observation(map, Point(visionMap.rows - from.x, from.y))
+    }
+
+    def turn(dir: Direction.Direction): Observation = dir match {
+      case Direction.North => turnNorth
+      case Direction.South => turnSouth
+      case Direction.West => turnWest
+      case Direction.East => turnEast
+    }
   }
 
   type Pattern = (Observation) => Double

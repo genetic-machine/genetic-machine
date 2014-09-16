@@ -7,5 +7,5 @@ object ZeroFeedback extends FeedbackStrategy {
     LabyrinthFeedback(0.0)
   }
 
-  override def toString(): String = "Zero feedback"
+  override def toString: String = "Zero feedback"
 }

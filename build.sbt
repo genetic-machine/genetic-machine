@@ -16,24 +16,24 @@ packageDescription in Linux := "A long description of Genetic + Machine"
 
 rpmVendor := "MIPT"
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.2"
 
 scalacOptions += "-feature"
 
 resolvers += "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases/"
 
 
-libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.1.5" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.5" % "test"
 
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-actor" % "2.3.4",
-  "com.typesafe.akka" %% "akka-testkit" % "2.3.4" % "test",
-  "com.typesafe.akka" %% "akka-remote" % "2.3.4"
+  "com.typesafe.akka" %% "akka-actor" % "2.3.6",
+  "com.typesafe.akka" %% "akka-testkit" % "2.3.6" % "test",
+  "com.typesafe.akka" %% "akka-remote" % "2.3.6"
 )
 
 libraryDependencies  ++= Seq(
-  "org.scalanlp" % "breeze_2.10" % "0.7",
-  "org.scalanlp" % "breeze-natives_2.10" % "0.7"
+  "org.scalanlp" %% "breeze" % "0.9"
+  //"org.scalanlp" %% "breeze-natives" % "0.9"
 )
 
 resolvers ++= Seq(
@@ -43,4 +43,4 @@ resolvers ++= Seq(
 
 libraryDependencies += "org.neo4j" % "neo4j" % "2.1.2"
 
-libraryDependencies += "org.scala-lang" % "scala-pickling_2.11" % "0.8.0"
+libraryDependencies += "org.scala-lang" %% "scala-pickling" % "0.8.0"

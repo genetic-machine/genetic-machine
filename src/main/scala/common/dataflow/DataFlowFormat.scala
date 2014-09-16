@@ -1,5 +1,7 @@
 package common.dataflow
 
+import scala.reflect._
+
 object DataFlowFormat {
 
   val brainLabel = "BRAIN"
@@ -83,6 +85,19 @@ object DataFlowFormat {
   def sample: DataFlowFormat = {
     sampleBuilder.toDataFlowFormat
   }
+
+
+  final class DFFProps(val props: Map[String, Any]) {
+    def getAs[T : ClassTag](key: String): Option[T] = {
+      for {
+        x <- props.get(key)
+        if classTag[T].runtimeClass.isInstance(x)
+      } yield x.asInstanceOf[T]
+    }
+  }
+
+  import scala.language.implicitConversions
+  implicit def mapToProps(props: Map[String, Any]): DFFProps = new DFFProps(props)
 }
 
 import DataFlowFormat._
