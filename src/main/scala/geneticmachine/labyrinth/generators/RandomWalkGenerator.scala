@@ -7,10 +7,10 @@ import scala.util.Random
 final case class RandomWalkGenerator(lineLenDelta: Int, minLineLen: Int)
                                     (size: Point) extends LabyrinthGenerator {
 
-  override def toString(): String = s"RandomWalkGenerator(line: $minLineLen - ${minLineLen + lineLenDelta}, " +
+  override def toString: String = s"RandomWalkGenerator(line: $minLineLen - ${minLineLen + lineLenDelta}, " +
     s"size: ${size.x}x${size.y})"
 
-  def apply(): (Labyrinth, Point, Point) = {
+  def apply(): (Labyrinth, RobotPosition, Point) = {
     val Point(rows, cols) = size
     val lab = Labyrinth.occupied(rows, cols)
 
@@ -28,6 +28,6 @@ final case class RandomWalkGenerator(lineLenDelta: Int, minLineLen: Int)
       }
     }
 
-    (gen(lab, start, goal), start, goal)
+    (gen(lab, start, goal), RobotPosition(start, Direction.North), goal)
   }
 }

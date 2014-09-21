@@ -6,6 +6,7 @@ import common.dataflow.{DataFlowFormat, DataFlowFormatBuilder}
 import geneticmachine.labyrinth.LabyrinthCommand.LabyrinthCommand
 import geneticmachine.labyrinth._
 import geneticmachine.{Brain, BrainFactory}
+import geneticmachine.labyrinth.heuristics.DijkstraHeuristicSensor
 
 import scala.concurrent.Future
 
@@ -40,7 +41,7 @@ class DijkstraBrain(dff: DataFlowFormat)
   override def init: Future[Integer] = Future.successful { 0: Integer }
 
   override def input(stepCounter: Integer, data: LabyrinthInput): Future[(Integer, LabyrinthCommand)] = Future {
-    val (command, _) = strictMinPathSensor(data).max(Ordering by { x: (LabyrinthCommand.LabyrinthCommand, Double) => x._2 })
+    val command = DijkstraHeuristicSensor.optimalCommand(data)
     val newState: Integer = stepCounter + 1
     (newState, command)
   }

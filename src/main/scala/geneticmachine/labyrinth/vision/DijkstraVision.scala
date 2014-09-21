@@ -7,7 +7,7 @@ object DijkstraVision {
 }
 
 class DijkstraVision(val depth: Int) extends Vision {
-  def apply(labyrinth: Labyrinth, from: Point): Observation = {
+  def apply(labyrinth: Labyrinth, from: RobotPosition): Observation = {
     val vision = Labyrinth.unknown(2 * depth + 1, 2 * depth + 1)
     val offset = Point(depth, depth)
     vision(offset.x, offset.y) = CellStatus.Free
@@ -17,9 +17,9 @@ class DijkstraVision(val depth: Int) extends Vision {
         p <- openSet
         neigh <- p.neighbors.filter { _.inBorders(labyrinth.rows, labyrinth.cols) }
         if !closedSet.contains(neigh)
-        if (neigh - from).l1Norm <= depth
+        if (neigh - from.point).l1Norm <= depth
       } yield {
-        val visP = neigh - from + offset
+        val visP = neigh - from.point + offset
         vision(visP.x, visP.y) = labyrinth(neigh.x, neigh.y)
         neigh
       }
@@ -34,7 +34,7 @@ class DijkstraVision(val depth: Int) extends Vision {
       }
     }
 
-    breadthFirstSearch(Set(from), Set.empty)
+    breadthFirstSearch(Set(from.point), Set.empty)
 
     Observation(vision, from)
   }

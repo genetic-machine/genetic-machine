@@ -4,7 +4,7 @@ import geneticmachine.labyrinth.Direction._
 
 package object generators {
   trait LabyrinthGenerator extends Serializable {
-    def apply(): (Labyrinth, Point, Point)
+    def apply(): (Labyrinth, RobotPosition, Point)
   }
 
   def line(lab: Labyrinth, p: Point, len: Int, direction: Direction): Point = {

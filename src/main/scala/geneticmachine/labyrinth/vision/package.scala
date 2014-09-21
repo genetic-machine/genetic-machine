@@ -2,17 +2,17 @@ package geneticmachine.labyrinth
 
 package object vision {
   trait Vision extends Serializable {
-    def apply(labyrinth: Labyrinth, from: Point): Observation
+    def apply(labyrinth: Labyrinth, from: RobotPosition): Observation
   }
 
-  final case class Observation(visionMap: Labyrinth, from: Point) {
+  final case class Observation(visionMap: Labyrinth, from: RobotPosition) {
     def impose(lab: Labyrinth): Labyrinth = {
       val depth = (visionMap.rows - 1) / 2
       for {
         x <- 0 until visionMap.rows
         y <- 0 until visionMap.cols
-        labX = x + from.x - depth
-        labY = y + from.y - depth
+        labX = x + from.point.x - depth
+        labY = y + from.point.y - depth
         if labX >= 0
         if labY >= 0
         if labX < lab.rows
@@ -26,6 +26,7 @@ package object vision {
     }
 
     def turnNorth = this
+
     def turnEast: Observation = {
       val map = Labyrinth.unknown(visionMap.cols, visionMap.rows)
       for {
@@ -59,10 +60,10 @@ package object vision {
         map(row, col) = visionMap(row, col)
       }
 
-      Observation(map, Point(visionMap.rows - from.x, from.y))
+      Observation(map, RobotPosition(Point(visionMap.rows - from.point.x, from.point.y), Direction.South))
     }
 
-    def turn(dir: Direction.Direction): Observation = dir match {
+    def orientated: Observation = from.direction match {
       case Direction.North => turnNorth
       case Direction.South => turnSouth
       case Direction.West => turnWest

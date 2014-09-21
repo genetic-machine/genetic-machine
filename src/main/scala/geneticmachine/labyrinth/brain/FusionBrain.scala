@@ -4,6 +4,7 @@ import breeze.linalg.{ Vector => BreezeVector, _ }
 import common.dataflow._
 import geneticmachine.genetic.Evolution
 import geneticmachine.labyrinth._
+import geneticmachine.labyrinth.heuristics._
 
 import scala.collection.parallel.immutable.ParVector
 import scala.concurrent.Future
@@ -47,6 +48,9 @@ class FusionBrain(val evolution: Evolution[ParVector[Gene]])
     dffBuilder.toDataFlowFormat
   }
 
+  /**
+   * Fusion brain hasn't any internal state so [[reset]] simply returns current state.
+   */
   override protected def reset(state: Population): Future[Population] = Future.successful {
     state
   }
@@ -54,12 +58,10 @@ class FusionBrain(val evolution: Evolution[ParVector[Gene]])
   override protected def input(state: Population,
                                input: LabyrinthInput): Future[(Population, LabyrinthOutput)] = Future {
     val observation = input.observation
-    val (heuristic, _) = strictMinPathSensor(input).max {
-      Ordering by { x: (LabyrinthCommand.LabyrinthCommand, Double) => x._2}
-    }
+    val heuristicResult = DijkstraHeuristicSensor(input)
 
     val gs = state.entities.map { entity =>
-      val gain = entity.pattern.compare(observation, heuristic)
+      val gain = entity.pattern.compare(observation, heuristicResult)
       entity.copy(currentGain = gain)
     }
 

@@ -29,13 +29,10 @@ object LabyrinthPattern {
 import LabyrinthPattern._
 
 final case class LabyrinthPattern(matrix: DenseMatrix[Double],
-    patternCommand: Command, commandCoefficient: Double) {
+                                  patternCommand: Command, commandCoefficient: Double) {
 
-  def id(c: Command): Double = if (patternCommand == c) { 1.0 } else { 0.0 }
-
-  def compare(obs: Observation, command: Command): Double = {
-    (matrix: MapPattern) * obs +
-    commandCoefficient * id(command)
+  def compare(obs: Observation, commandSignal: CommandSignal): Double = {
+    (matrix: MapPattern) * obs + commandCoefficient * commandSignal(patternCommand)
   }
 
   def asProps: Map[String, Any] = {

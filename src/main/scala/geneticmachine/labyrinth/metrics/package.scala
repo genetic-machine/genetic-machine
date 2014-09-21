@@ -11,7 +11,7 @@ package object metrics {
     def apply(state: LabyrinthState): Seq[Double] = {
       val target = state.goal
       state.path.map { p =>
-        (p - target).l1Norm.toDouble
+        (p.point - target).l1Norm.toDouble
       }
     }
   }
@@ -20,7 +20,7 @@ package object metrics {
     def apply(state: LabyrinthState): Seq[Double] = {
       val target = state.goal
       state.path.map { p =>
-        (p - target).l2Norm
+        (p.point - target).l2Norm
       }
     }
   }

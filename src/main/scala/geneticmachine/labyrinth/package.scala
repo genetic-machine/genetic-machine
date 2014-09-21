@@ -99,6 +99,7 @@ package object labyrinth {
     /** Labyrinth operators **/
     def inBorders(sizeX: Int, sizeY: Int): Boolean = (x >= 0) && (x < sizeX) && (y >= 0) && (y < sizeY)
 
+    /** Note: if point is [[Unknown]] cell of `lab` it returns `true`. **/
     def inLabyrinth(lab: Labyrinth): Boolean = inBorders(lab.rows, lab.cols) && (lab(x, y) != Occupied)
 
     def neighborsInLabyrinth(lab: Labyrinth) = neighbors filter { _.inLabyrinth(lab) }
@@ -115,23 +116,11 @@ package object labyrinth {
     val zero = Point(0, 0)
   }
 
-  type Path = List[Point]
+  type Path = List[RobotPosition]
 
   object LabyrinthCommand extends Enumeration {
     type LabyrinthCommand = Value
     val TurnLeft, TurnRight, Forward = Value
-  }
-
-  type CommandSignal = Map[LabyrinthCommand.LabyrinthCommand, Double]
-
-  object CommandSignal {
-    def empty = Map (
-      LabyrinthCommand.Forward -> 0.0,
-      LabyrinthCommand.TurnLeft -> 0.0,
-      LabyrinthCommand.TurnRight -> 0.0
-    )
-
-    def apply(cs: CommandSignal) = empty ++ cs
   }
 
   object Direction {
@@ -140,19 +129,70 @@ package object labyrinth {
     final val South = Point(-1, 0)
     final val West = Point(0, 1)
     final val East = Point(0, -1)
+    final val Zero = Point(0, 0)
 
     final val directions = Seq(North, South, West, East)
+
+    /**
+     * Only for nice serialization.
+     */
+    final def id(dir: Direction): Char = dir match {
+      case `North` => '^'
+      case `South` => 'V'
+      case `West` => '<'
+      case `East` => '>'
+      case _ => '?'
+    }
+
+    final def fromId(dirC: Char): Direction = dirC match {
+      case '^' => North
+      case 'V' => South
+      case '<' => West
+      case '>' => East
+      case _ => Zero
+    }
 
     type Direction = Point
   }
 
   import Direction._
 
-  def costMap(lab: Labyrinth, from: Point, depth: Int = Int.MaxValue): DenseMatrix[Int] = {
+  /**
+   * General BFS algorithm.
+   * @param from initial point
+   * @param depth maximal depth
+   * @param neighbor generates states reachable from given point.
+   *                 Cost between current and produced states is assumed to be 1.
+   * @tparam A type of state
+   * @return cost map: state -> cost
+   */
+  def breadthFirstSearch[A](from: A, depth: Int)(neighbor: A => Seq[A]): Map[A, Int] = {
+    def bfs(open: Set[A], depth: Int, cost: Map[A, Int]): Map[A, Int] = {
+      val wave = (for {
+        state <- open
+        n <- neighbor(state)
+        if !cost.contains(n) || cost(n) > cost(state) + 1
+      } yield (n, cost(state) + 1)).toMap
+
+      if (wave.nonEmpty && depth > 0) {
+        bfs(wave.keySet, depth - 1, cost ++ wave)
+      } else {
+        cost
+      }
+    }
+
+    bfs(Set[A](from), depth, Map[A, Int](from -> 0))
+  }
+
+  /**
+   * Potential map of labyrinth without respect to robot's direction.
+   * Optimized bfs.
+   */
+  def costMapWithoutDirection(lab: Labyrinth, from: Point, depth: Int = Int.MaxValue): DenseMatrix[Int] = {
     val costMap = DenseMatrix.fill(lab.rows, lab.cols)(Int.MaxValue)
     costMap(from.x, from.y) = 0
 
-    def breadthFirstSearch(openSet: Set[Point], closedSet: Set[Point], depth: Int) {
+    def bfs(openSet: Set[Point], closedSet: Set[Point], depth: Int) {
       val newOpenSet = for {
         p <- openSet
         n <- p.neighborsInLabyrinth(lab)
@@ -164,21 +204,142 @@ package object labyrinth {
       }
 
       if (newOpenSet.nonEmpty && depth > 0) {
-        breadthFirstSearch(newOpenSet, closedSet.union(openSet), depth - 1)
+        bfs(newOpenSet, closedSet.union(openSet), depth - 1)
       }
     }
 
-    breadthFirstSearch(Set[Point](from), Set.empty[Point], depth)
+    bfs(Set[Point](from), Set.empty[Point], depth)
     costMap
   }
 
+  final case class RobotPosition(point: Point, direction: Direction) {
 
+    def forward = RobotPosition(point + direction, direction)
+
+    def turnLeft = RobotPosition(point, direction.turnLeft)
+
+    def turnRight = RobotPosition(point, direction.turnRight)
+
+    def neighbors = List(forward, turnLeft, turnRight)
+
+    /** Returns true only for [[Zero]] and [[Free]] cells of `lab`. **/
+    def inLabyrinth(lab: Labyrinth): Boolean = point.inLabyrinth(lab)
+
+    def *(command: LabyrinthCommand.LabyrinthCommand): RobotPosition = {
+      command match {
+        case LabyrinthCommand.Forward => forward
+        case LabyrinthCommand.TurnLeft => turnLeft
+        case LabyrinthCommand.TurnRight => turnRight
+      }
+    }
+
+    def /(other: RobotPosition): Option[LabyrinthCommand.LabyrinthCommand] = {
+      if (other == this.forward) {
+        Some(LabyrinthCommand.Forward)
+      } else if (other == this.turnLeft) {
+        Some(LabyrinthCommand.TurnLeft)
+      } else if (other == this.turnRight) {
+        Some(LabyrinthCommand.TurnRight)
+      } else {
+        None
+      }
+    }
+
+    def apply(command: LabyrinthCommand.LabyrinthCommand) = this * command
+
+    def %%(lab: Labyrinth): Boolean = this.inLabyrinth(lab)
+
+    def neighborsInLabyrinth(lab: Labyrinth): Seq[RobotPosition] = neighbors.filter { rp =>
+      rp.point.inLabyrinth(lab)
+    }
+
+    def actionOpt(lab: Labyrinth)(command: LabyrinthCommand.LabyrinthCommand): Option[RobotPosition] = {
+      if ((this * command) %% lab) {
+        Some(this * command)
+      } else {
+        None
+      }
+    }
+
+    def action(lab: Labyrinth)(command: LabyrinthCommand.LabyrinthCommand): RobotPosition = {
+      actionOpt(lab)(command).getOrElse(this)
+    }
+
+    def actions(lab: Labyrinth): Seq[(LabyrinthCommand.LabyrinthCommand, RobotPosition)] = {
+      Seq (
+        (LabyrinthCommand.TurnLeft, turnLeft),
+        (LabyrinthCommand.Forward, forward),
+        (LabyrinthCommand.TurnRight, turnRight)
+      ).filter { actionPos =>
+        actionPos._2.inLabyrinth(lab)
+      }
+    }
+  }
+
+  /**
+   * Potential map of labyrinth with respect to robot's direction.
+   */
+  def costMap(lab: Labyrinth, from: RobotPosition, depth: Int = Int.MaxValue): DenseMatrix[Int] = {
+    val cost = costDict(lab, from, depth)
+
+    val potentialMap = DenseMatrix.fill[Int](lab.rows, lab.cols)(Int.MaxValue)
+    for ((rp, value) <- cost) {
+      potentialMap(rp.point.x, rp.point.y) = potentialMap(rp.point.x, rp.point.y) min value
+    }
+
+    potentialMap
+  }
+
+  def reverseCostMap(lab: Labyrinth, goal: Point): DenseMatrix[Int] = {
+
+    def matrixMin(ms: Seq[DenseMatrix[Int]]): DenseMatrix[Int] = {
+      val acc = ms(0).copy
+
+      for (m <- ms.tail) {
+        for (i <- 0 until acc.rows; j <- 0 until acc.cols) {
+          acc(i, j) = acc(i, j) min m(i, j)
+        }
+      }
+
+      acc
+    }
+
+    matrixMin {
+      directions.map { dir =>
+        costMap(lab, RobotPosition(goal, dir))
+      }
+    }
+  }
+
+  type CostDict = Map[RobotPosition, Int]
+
+  def costDict(lab: Labyrinth, from: RobotPosition, depth: Int = Int.MaxValue): CostDict = {
+    breadthFirstSearch[RobotPosition](from, depth) { rp: RobotPosition =>
+      rp.neighborsInLabyrinth(lab)
+    }
+  }
+
+  /**
+   * Cost dict from goal to all possible positions. Since goal isn't [[RobotPosition]] i.e.
+   * doesn't contain [[Direction.Direction]], this method takes minimum for each cell
+   * for all possible directions in goal position.
+   */
+  def reverseCostDict(lab: Labyrinth, goal: Point): CostDict = {
+    directions.map { dir =>
+      costDict(lab, RobotPosition(goal, dir))
+    }.reduceLeft { (d1: CostDict, d2: CostDict) =>
+      (for {
+        (rp, cost1) <- d1
+        cost2 = d2(rp)
+      } yield (rp, cost1 min cost2)).toMap
+    }
+  }
 
   def printLab(lab: Labyrinth): DenseMatrix[Char] = {
     lab map {
-      case Free => ' '
-      case Occupied => '#'
-      case Unknown => '`'
+      case `Free` => ' '
+      case `Occupied` => '#'
+      case `Unknown` => '`'
     }
   }
 
@@ -192,6 +353,29 @@ package object labyrinth {
     seqMatrix.map { _.mkString("") }.mkString("\n")
   }
 
+  type CommandSignal = Map[LabyrinthCommand.LabyrinthCommand, Double]
+
+  object CommandSignal {
+    def empty = Map (
+      LabyrinthCommand.Forward -> 0.0,
+      LabyrinthCommand.TurnLeft -> 0.0,
+      LabyrinthCommand.TurnRight -> 0.0
+    )
+
+    def normed(cs: CommandSignal): CommandSignal = {
+      val statSum = cs.values.sum
+      if (statSum > 0.0) {
+        for {
+          (k, v) <- cs
+        } yield (k, v / statSum)
+      } else {
+        cs
+      }
+    }
+
+    def apply(cs: CommandSignal) = empty ++ cs
+  }
+
   def directionToCommand(robotDirection: Direction)(direction: Direction): Seq[LabyrinthCommand.LabyrinthCommand] = {
     val robotDirectionLeft = robotDirection.turnLeft
     val robotDirectionRight = robotDirection.turnRight
@@ -203,67 +387,49 @@ package object labyrinth {
     }
   }
 
-  def strictMinPathSensor(lab: Labyrinth, from: Point,
-                          robotDirection: Direction,
-                          cost: CostMap): CommandSignal = {
-
-    val localCost = for {
-      dir <- directions
-      p = from + dir
-      if p.inLabyrinth(lab)
-      c = cost(p.x, p.y) + (dir - robotDirection).lInfNorm
-    } yield (dir, c)
-
-    val (_, minCost) = localCost min (Ordering by { x: (Direction, Int) => x._2 })
-    val minDirs = localCost filter { _._2 == minCost } map { _._1 }
-
-    CommandSignal {
-      (for {
-        dir <- minDirs
-        command <- directionToCommand(robotDirection)(dir)
-      } yield (command, 1.0)).toMap
-    }
-  }
-
-  case class LabyrinthInput(lab: Labyrinth, robotPosition: Point, robotDirection: Direction, goal: Point) {
-    def observation: Observation = Observation(lab, robotPosition).turn(robotDirection)
+  case class LabyrinthInput(lab: Labyrinth, robotPosition: RobotPosition, goal: Point) {
+    def observation: Observation = Observation(lab, robotPosition).orientated
   }
 
   case class LabyrinthState(visionMap: Labyrinth, labyrinth: Labyrinth,
-                             robotPosition: Point, robotDirection: Direction.Direction,
-                             goal: Point, path: Path, history: List[LabyrinthCommand.LabyrinthCommand]) {
+                            robotPosition: RobotPosition,
+                            goal: Point, path: Path, history: List[LabyrinthCommand.LabyrinthCommand]) {
 
     def toCharMap: DenseMatrix[Char] = {
       val result = printLab(visionMap)
 
       path.foreach { p =>
-        result(p.x, p.y) = '+'
+        result(p.point.x, p.point.y) = if (result(p.point.x, p.point.y) == '+') { '*' } else { '+' }
       }
 
-      result(robotPosition.x, robotPosition.y) = robotDirection match {
-        case Direction.North => 'V'
-        case Direction.South => 'A'
-        case Direction.West => '>'
-        case Direction.East => '<'
-      }
+      result(robotPosition.point.x, robotPosition.point.y) = Direction.id(robotPosition.direction)
 
       result
     }
 
     override def toString: String = {
       s"LabyrinthStatus(labyrinth: ${labyrinth.rows}x${labyrinth.cols}, " +
-        s"position: $robotPosition, direction: $robotDirection, goal: $goal, history: ${history.size} commands)"
+        s"position: $robotPosition, direction, goal: $goal, history: ${history.size} commands)"
     }
   }
 
-  def strictMinPathSensor(labInput: LabyrinthInput): CommandSignal = {
-    val LabyrinthInput(lab, from, robotDirection, goal) = labInput
-    strictMinPathSensor(lab, from, robotDirection, costMap(lab, goal))
+  trait LabyrinthHeuristic extends (LabyrinthInput => CommandSignal) {
+    override def toString: String = "Incomplete Labyrinth Heuristic"
+
+    final def optimalCommand(input: LabyrinthInput): LabyrinthCommand.LabyrinthCommand = {
+      this(input).maxBy {
+        kv: (LabyrinthCommand.LabyrinthCommand, Double) => kv._2
+      }._1
+    }
   }
 
   type LabyrinthOutput = LabyrinthCommand.LabyrinthCommand
 
-  case class LabyrinthFeedback(value: Double)
+  case class LabyrinthFeedback(value: Double) {
+    final def +(other: LabyrinthFeedback) = LabyrinthFeedback(this.value + other.value)
+
+    final def +(other: Double) = LabyrinthFeedback(this.value + other)
+  }
 
   abstract class LabyrinthBrain[StateT : ClassTag](dff: DataFlowFormat) extends
     Brain[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, StateT](dff)

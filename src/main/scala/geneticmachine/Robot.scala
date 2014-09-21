@@ -78,7 +78,7 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
 
   protected def serialize(status: StateT): Future[DataFlowFormat]
 
-  private final def calculateMetrics(dff: DataFlowFormat, result: RobotResult[StateT]): DataFlowFormat = {
+  private final def mixinMetrics(dff: DataFlowFormat, result: RobotResult[StateT]): DataFlowFormat = {
     val metricProps: Map[String, Any] =
       (for {
         (metricName, value: Double) <- result.metrics
@@ -173,7 +173,7 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
       (for {
         dff <- serialize(result.worldState)
       } yield {
-        MessageProtocol.Serialized(calculateMetrics(dff, result))
+        MessageProtocol.Serialized(mixinMetrics(dff, result))
       }) recover {
         case e: Throwable =>
           MessageProtocol.Fail(e)

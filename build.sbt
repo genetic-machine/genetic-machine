@@ -22,7 +22,6 @@ scalacOptions += "-feature"
 
 resolvers += "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases/"
 
-
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.1.5" % "test"
 
 libraryDependencies ++= Seq(

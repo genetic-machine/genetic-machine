@@ -11,7 +11,7 @@ final class MapPattern(val matrix: DenseMatrix[Double]) extends Pattern {
 
   /** Some kind of convolution **/
   def *(observation: Observation): Double = {
-    val from = observation.from
+    val from = observation.from.point
     val pR = patternRadius
     val maxVisionPoint = Point(observation.visionMap.rows - 1, observation.visionMap.cols - 1)
 

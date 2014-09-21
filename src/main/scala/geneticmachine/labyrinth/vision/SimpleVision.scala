@@ -2,14 +2,15 @@ package geneticmachine.labyrinth.vision
 
 import breeze.linalg.DenseMatrix
 import scala.math._
-import geneticmachine.labyrinth.{ Labyrinth, Point, CellStatus}
+import geneticmachine.labyrinth.{ Labyrinth, Point, CellStatus, RobotPosition}
 
 object SimpleVision {
   def apply(depth: Int) = new SimpleVision(depth)
 }
 
 class SimpleVision(val depth: Int) extends Vision {
-  def apply(lab: Labyrinth, from: Point): Observation = {
+  def apply(lab: Labyrinth, rp: RobotPosition): Observation = {
+    val from = rp.point
     val size = 2 * depth + 1
     val visionMap = DenseMatrix.fill(size, size)(CellStatus.Unknown)
 
@@ -23,8 +24,8 @@ class SimpleVision(val depth: Int) extends Vision {
       visionMap(x, y) = if (Point(labX, labY).inBorders(lab.rows, lab.cols)) lab(labX, labY) else CellStatus.Unknown
     }
 
-    Observation(visionMap, from)
+    Observation(visionMap, rp)
   }
 
-  override def toString(): String = s"SimpleVision($depth)"
+  override def toString: String = s"SimpleVision($depth)"
 }
