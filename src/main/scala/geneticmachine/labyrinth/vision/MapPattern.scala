@@ -12,19 +12,19 @@ final class MapPattern(val matrix: DenseMatrix[Double]) extends Pattern {
   /** Some kind of convolution **/
   def *(observation: Observation): Double = {
     val from = observation.from.point
-    val pR = patternRadius
     val maxVisionPoint = Point(observation.visionMap.rows - 1, observation.visionMap.cols - 1)
 
     // define the area of convolution
-    val leftBorder = (from - pR) min Point.zero
-    val rightBorder = (from + pR) max maxVisionPoint
+    val leftBorder = (from - patternRadius) max Point.zero
+    val rightBorder = (from + patternRadius) min maxVisionPoint
+    val patternLeftBorder = patternRadius - from
 
     val visionMap = observation.visionMap
 
     val anormedConvolution: Double = (for {
       vRow <- leftBorder.x to rightBorder.x
       vCol <- leftBorder.y to rightBorder.y
-      Point(pRow, pCol) = pR - from + Point(vRow, vCol)
+      Point(pRow, pCol) = Point(vRow, vCol) + patternLeftBorder
     } yield matrix(pRow, pCol) * visionMap(vRow, vCol)).sum
 
     anormedConvolution / statSum

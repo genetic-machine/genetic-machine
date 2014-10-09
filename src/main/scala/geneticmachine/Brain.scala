@@ -24,7 +24,13 @@ object Brain {
 
 trait BrainFactory[I, O, F] extends Serializable {
   def props(dff: DataFlowFormat): Props
-  def empty: DataFlowFormat
+  def empty: DataFlowFormat = {
+    val builder = DataFlowFormatBuilder(brainLabel)
+    builder.node("LabyrinthInput").asInput()
+    builder.node("LabyrinthOutput").asOutput()
+
+    builder.toDataFlowFormat
+  }
 
   def errorDff(e: Throwable): DataFlowFormat = {
     DataFlowFormat.errorDff(brainLabel, e)
@@ -137,7 +143,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
 
   private final def failureReceive(activity: String)(requester: ActorRef, currentState: StateT): Receive = {
     case akka.actor.Status.Failure(e: Throwable) =>
-      log.error(s"Main activity ($activity) has been failed! [$e]")
+      log.error(e, s"Main activity ($activity) has been failed!")
       requester ! MP.Fail(e)
       context.become(process(currentState))
       unstashAll()
@@ -234,7 +240,7 @@ abstract class Brain[InputT : ClassTag, OutputT : ClassTag,
 
     case MP.InitializationFailed(e: Throwable) =>
       context.become(badlyInitialized(e))
-      log.error(s"Initialization failed! [$e]")
+      log.error(e, s"Initialization failed!")
       unstashAll()
 
     case msg =>

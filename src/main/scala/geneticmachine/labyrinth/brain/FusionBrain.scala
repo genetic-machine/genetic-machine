@@ -1,17 +1,33 @@
 package geneticmachine.labyrinth.brain
 
 import breeze.linalg.{ Vector => BreezeVector, _ }
+import common.dataflow.DataFlowFormat._
 import common.dataflow._
+import geneticmachine.BrainFactory
 import geneticmachine.genetic.Evolution
 import geneticmachine.labyrinth._
 import geneticmachine.labyrinth.heuristics._
 
-import scala.collection.parallel.immutable.ParVector
+import scala.collection.parallel.immutable.{ParRange, ParVector}
 import scala.concurrent.Future
 import akka.actor._
 
-class FusionBrain(val evolution: Evolution[ParVector[Gene]])
-                  (dff: DataFlowFormat) extends LabyrinthBrain[Population](dff) {
+final case class FusionBrainFactory(evolution: Evolution[ParVector[Gene]]) extends BrainFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback] {
+
+  def props(dff: DataFlowFormat) = Props { new FusionBrain(evolution, dff) }
+
+  override def toString: String = s"Fusion Brain ($evolution)"
+
+  override def empty: DataFlowFormat = {
+    val builder = DataFlowFormatBuilder(brainLabel)
+    builder.node("LabyrinthInput").asInput()
+    builder.node("LabyrinthOutput").asOutput()
+
+    builder.toDataFlowFormat
+  }
+}
+
+class FusionBrain(val evolution: Evolution[ParVector[Gene]], dff: DataFlowFormat) extends LabyrinthBrain[Population](dff) {
 
   import context.dispatcher
 
@@ -29,9 +45,7 @@ class FusionBrain(val evolution: Evolution[ParVector[Gene]])
       entity <- Gene.fromProps(props)
     } yield entity).toVector.par
 
-    val lastAction = LabyrinthCommand(0)
-
-    Population(evolution(entities), lastAction)
+    Population(evolution(entities), 0)
   }
 
   override protected def serialize(state: Population): Future[DataFlowFormat] = Future {
@@ -55,34 +69,53 @@ class FusionBrain(val evolution: Evolution[ParVector[Gene]])
     state
   }
 
+  private def action(genes: ParVector[Gene],
+                     observation: vision.Observation,
+                     heuristic: CommandSignal): (Population, LabyrinthOutput) = {
+    val gs = genes.map { gene =>
+      val gain = gene.pattern.compare(observation, heuristic)
+      gene.copy(currentGain = gain)
+    }
+
+    val bestGene = (0 until gs.size).par.max {
+      Ordering by { i: Int =>
+        gs(i).currentGain * gs(i).strength
+      }
+    }
+
+    if (gs(bestGene).currentGain > 0.0) {
+      (Population(gs, bestGene), gs(bestGene).action)
+    } else {
+      log.info(s"Forced mutation! Best gain ${gs(bestGene).currentGain};")
+      val mutated = evolution(gs)
+      action(mutated, observation, heuristic)
+    }
+  }
+
   override protected def input(state: Population,
                                input: LabyrinthInput): Future[(Population, LabyrinthOutput)] = Future {
     val observation = input.observation
     val heuristicResult = DijkstraHeuristicSensor(input)
 
-    val gs = state.entities.map { entity =>
-      val gain = entity.pattern.compare(observation, heuristicResult)
-      entity.copy(currentGain = gain)
-    }
-
-    val best = gs.max {
-      Ordering by { entity: Gene => entity.currentGain * entity.strength }
-    }
-
-    (Population(gs, best.action), best.action)
+    action(state.entities, observation, heuristicResult)
   }
 
   override protected def feedback(state: Population, feedback: LabyrinthFeedback): Future[Population] = Future {
-    val gs = state.entities.map { g: Gene =>
-      val strength = if (g.action == state.lastAction) {
-        g.strength * (1.0 + feedback.value * g.currentGain)
-      } else {
-        g.strength
-      }
+    log.info("Active gene")
+    log.info(s"\n${ state.entities(state.activeGene) }")
 
-      g.copy(strength = strength)
-    }
+    val activeG = state.entities(state.activeGene)
+    val updatedG = activeG.copy(strength = activeG.strength + activeG.currentGain * feedback.value)
+    val gs = state.entities.updated(state.activeGene, updatedG)
 
-    Population(evolution(gs), state.lastAction)
+    val updatedPopulation = evolution(gs)
+    val meanR = gs.map { en: Gene =>
+      (en.pattern.matrix.cols - 1) / 2.0
+    }.sum / gs.size
+
+    log.info(s"D strength = ${updatedG.strength - activeG.strength}")
+
+    log.info(s"pattern R $meanR")
+    Population(updatedPopulation, state.activeGene)
   }
 }

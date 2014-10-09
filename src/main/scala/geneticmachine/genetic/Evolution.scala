@@ -3,64 +3,6 @@ package geneticmachine.genetic
 import scala.collection.parallel.immutable.{ParRange, ParVector}
 import scala.util.Random
 
-trait Mutator[T] extends Serializable {
-  /** 0-arity mutation **/
-  /** That is how the life appeared. **/
-  def generation(): T
-
-  /** 1-arity mutation **/
-  /** That is how the life evolved firstly. **/
-  def pointMutation(gene: T): T
-
-  /** 1-arity mutation, 'vectorized' version. **/
-  /** Since there is almost only one use-case of point mutation
-   *  reimplementation might speed up mutation.
-   */
-  def pointMutation(genes: Vector[T]): Vector[T] = {
-    genes.map(pointMutation)
-  }
-
-  /** 2-arity mutation **/
-  /** That is how the life grew up. **/
-  def crossover(g1: T, g2: T): T
-
-  /**
-   * n-arity mutation (n > 2).
-   *
-   * Since our nature doesn't think there is something good in
-   *  n-arity mutation when n > 2, e.g. mutation of triplets and we
-   *  listen to the wisdom of billion years and so we leave n-arity
-   *  mutation as forgotten by evolution function
-   *  which hope to be used one day.
-   *
-   *  Dummy realisation simply applies crossover for each gene and randomly
-   *  selected partner.
-   */
-  def massiveMutation(gs: Vector[T]): Vector[T] = {
-    Random.shuffle(gs).zip(gs).map { genes: (T, T) =>
-      val (g1, g2) = genes
-      crossover(pointMutation(g1), pointMutation(g2))
-    }
-  }
-
-  final def apply(): T = generation()
-
-  final def apply(g1: T): T = pointMutation(g1)
-
-  final def apply(g1: T, g2: T): T = crossover(g1, g2)
-
-  final def apply(gs: Vector[T]): Vector[T] = massiveMutation(gs)
-}
-
-/**
- * Represents selection.
- */
-trait Selector[P] extends Serializable {
-  final def apply(population: P): P = select(population)
-
-  def select(population: P): P
-}
-
 /**
  * `Evolution` is mutator over population in contrast to [[geneticmachine.genetic.Mutator]] - mutator of genes.
  *
@@ -143,21 +85,21 @@ import breeze.stats.distributions.Rand
 /**
  * Saves selected genes.
  */
-final class SafeEvolution[T] (val mutator: Mutator[T], val selector: Selector[ParVector[T]],
-                              val populationLimit: Int, val crossoverLimit: Int,
-                              val mutationLimit: Int, val generationLimit: Int)
+final case class SafeEvolution[T] (mutator: Mutator[T], selector: Selector[ParVector[T]],
+                                   populationLimit: Int, crossoverLimit: Int,
+                                   mutationLimit: Int, generationLimit: Int)
   extends Evolution[ParVector[T]] {
 
   import Evolution._
 
   def evolve(population: ParVector[T]): ParVector[T] = {
-    if (population.isEmpty) {
+    val selected = selector(population)
+
+    if (selected.size == 0) {
       parRange(0, populationLimit).map { _ =>
         mutator()
       }.toVector.par
     } else {
-      val selected = selector(population)
-
       val dist = Rand.choose(selected.seq)
 
       val toCrossover = (populationLimit - selected.size) min crossoverLimit
@@ -175,6 +117,7 @@ final class SafeEvolution[T] (val mutator: Mutator[T], val selector: Selector[Pa
       } yield mutator(g)
 
       val toGenerate = (populationLimit - selected.size - crossovered.size - mutated.size) min generationLimit
+
       val generated = for {
         _ <- parRange(0, toGenerate)
       } yield mutator()

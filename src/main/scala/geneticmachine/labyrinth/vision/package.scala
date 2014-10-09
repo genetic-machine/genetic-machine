@@ -6,6 +6,9 @@ package object vision {
   }
 
   final case class Observation(visionMap: Labyrinth, from: RobotPosition) {
+
+    override def toString: String = s"Observation($from):\n$visionMap"
+
     def impose(lab: Labyrinth): Labyrinth = {
       val depth = (visionMap.rows - 1) / 2
       for {
@@ -25,42 +28,36 @@ package object vision {
       lab
     }
 
+    def turn(coordTransform: (Int, Int) => (Int, Int), size: (Int, Int)): Labyrinth = {
+      val map = Labyrinth.unknown(size._1, size._2)
+
+      for (row <- 0 until visionMap.rows; col <- 0 until visionMap.cols) {
+        val (tRow, tCol) = coordTransform(row, col)
+        map(tRow, tCol) = visionMap(row, col)
+      }
+
+      map
+    }
+
+    val eastTransform = (row: Int, col: Int) => (col, visionMap.rows - row - 1)
+    val westTransform = (row: Int, col: Int) => (visionMap.cols - col - 1, row)
+    val southTransform = (row: Int, col: Int) => (visionMap.rows - row - 1, visionMap.cols - col - 1)
+
     def turnNorth = this
 
     def turnEast: Observation = {
-      val map = Labyrinth.unknown(visionMap.cols, visionMap.rows)
-      for {
-        row <- 0 until visionMap.rows
-        col <- 0 until visionMap.cols
-      } {
-        map(col, row) = visionMap(row, col)
-      }
-
-      Observation(map, from.turnRight)
+      val tPos = RobotPosition(from.point.map(eastTransform), from.direction.turnRight)
+      Observation(turn(eastTransform, (visionMap.cols, visionMap.rows)), tPos)
     }
 
     def turnWest: Observation = {
-      val map = Labyrinth.unknown(visionMap.cols, visionMap.rows)
-      for {
-        row <- 0 until visionMap.rows
-        col <- 0 until visionMap.cols
-      } {
-        map(visionMap.cols - col, row) = visionMap(row, col)
-      }
-
-      Observation(map, from.turnLeft)
+      val tPos = RobotPosition(from.point.map(westTransform), from.direction.turnLeft)
+      Observation(turn(westTransform, (visionMap.cols, visionMap.rows)), tPos)
     }
 
     def turnSouth: Observation = {
-      val map = Labyrinth.unknown(visionMap.rows, visionMap.cols)
-      for {
-        row <- 0 until visionMap.rows
-        col <- 0 until visionMap.cols
-      } {
-        map(row, col) = visionMap(row, col)
-      }
-
-      Observation(map, RobotPosition(Point(visionMap.rows - from.point.x, from.point.y), Direction.South))
+      val tPos = RobotPosition(from.point.map(southTransform), from.direction.reverse)
+      Observation(turn(southTransform, (visionMap.rows, visionMap.cols)), tPos)
     }
 
     def orientated: Observation = from.direction match {

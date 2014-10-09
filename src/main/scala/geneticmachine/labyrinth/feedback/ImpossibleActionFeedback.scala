@@ -6,7 +6,7 @@ import geneticmachine.labyrinth._
  * Returns [[feedback]] if `action` is impossible otherwise zero.
  * @param feedback should be negative.
  */
-case class ImpossibleActionFeedback(feedback: Int) extends FeedbackStrategy {
+case class ImpossibleActionFeedback(feedback: Double) extends FeedbackStrategy {
 
   override def toString: String = "Impossible action feedback"
 

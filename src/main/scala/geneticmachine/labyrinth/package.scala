@@ -15,6 +15,8 @@ package object labyrinth {
     final val Free: CellStatus = -1
     final val Occupied: CellStatus = 1
     final val Unknown: CellStatus = 0
+    final val startPosition: CellStatus = -2
+    final val goal: CellStatus = -3
   }
 
   import CellStatus._
@@ -71,11 +73,13 @@ package object labyrinth {
 
     def turnRight: Point = Point(y, -x)
 
+    def reverse: Point = Point(-x, -y)
+
     /** But it is the complex multiplication, i.e. rotation. **/
     def *(other: Point) = Point(this.x * other.x - this.y * other.y,
       this.y * other.x + this.x * other.y)
 
-    def *(scale: Int) = Point(this.x * scale, this.x * scale)
+    def *(scale: Int) = Point(this.x * scale, this.y * scale)
 
     def max(other: Point) = Point(this.x max other.x, this.y max other.y)
     def min(other: Point) = Point(this.x min other.x, this.y min other.y)
@@ -110,6 +114,11 @@ package object labyrinth {
       val y_ = (0 max y) min (lab.cols - 1)
       Point(x_, y_)
     }
+
+    def map(f: (Int, Int) => (Int, Int)): Point = {
+      val (tX, tY) = f(x, y)
+      Point(tX, tY)
+    }
   }
 
   object Point {
@@ -137,18 +146,18 @@ package object labyrinth {
      * Only for nice serialization.
      */
     final def id(dir: Direction): Char = dir match {
-      case `North` => '^'
-      case `South` => 'V'
-      case `West` => '<'
-      case `East` => '>'
+      case `North` => 'V'
+      case `South` => '^'
+      case `West` => '>'
+      case `East` => '<'
       case _ => '?'
     }
 
     final def fromId(dirC: Char): Direction = dirC match {
-      case '^' => North
-      case 'V' => South
-      case '<' => West
-      case '>' => East
+      case 'V' => North
+      case '^' => South
+      case '>' => West
+      case '<' => East
       case _ => Zero
     }
 
@@ -159,14 +168,13 @@ package object labyrinth {
 
   /**
    * General BFS algorithm.
-   * @param from initial point
    * @param depth maximal depth
    * @param neighbor generates states reachable from given point.
    *                 Cost between current and produced states is assumed to be 1.
    * @tparam A type of state
    * @return cost map: state -> cost
    */
-  def breadthFirstSearch[A](from: A, depth: Int)(neighbor: A => Seq[A]): Map[A, Int] = {
+  def breadthFirstSearch[A](from: A, depth: Int = Int.MaxValue)(neighbor: A => Seq[A]): Map[A, Int] = {
     def bfs(open: Set[A], depth: Int, cost: Map[A, Int]): Map[A, Int] = {
       val wave = (for {
         state <- open
@@ -180,7 +188,6 @@ package object labyrinth {
         cost
       }
     }
-
     bfs(Set[A](from), depth, Map[A, Int](from -> 0))
   }
 
@@ -219,6 +226,8 @@ package object labyrinth {
     def turnLeft = RobotPosition(point, direction.turnLeft)
 
     def turnRight = RobotPosition(point, direction.turnRight)
+
+    def reverse = RobotPosition(point, direction.reverse)
 
     def neighbors = List(forward, turnLeft, turnRight)
 
@@ -326,7 +335,9 @@ package object labyrinth {
    */
   def reverseCostDict(lab: Labyrinth, goal: Point): CostDict = {
     directions.map { dir =>
-      costDict(lab, RobotPosition(goal, dir))
+      breadthFirstSearch[RobotPosition](RobotPosition(goal, dir)) { rp: RobotPosition =>
+        rp.neighborsInLabyrinth(lab).map { n: RobotPosition => n.reverse }
+      }
     }.reduceLeft { (d1: CostDict, d2: CostDict) =>
       (for {
         (rp, cost1) <- d1
@@ -335,7 +346,19 @@ package object labyrinth {
     }
   }
 
-  def printLab(lab: Labyrinth): DenseMatrix[Char] = {
+  def costDictToMap(cost: CostDict): CostMap = {
+    val maxX = cost.keys.maxBy { rp: RobotPosition => rp.point.x }.point.x
+    val maxY = cost.keys.maxBy { rp: RobotPosition => rp.point.y }.point.y
+
+    val matrix = DenseMatrix.fill(maxX + 1, maxY + 1)(Int.MaxValue)
+    for ((rp, v) <- cost) {
+      matrix(rp.point.x, rp.point.y) = v min matrix(rp.point.x, rp.point.y)
+    }
+
+    matrix
+  }
+
+  def toCharMatrix(lab: Labyrinth): DenseMatrix[Char] = {
     lab map {
       case `Free` => ' '
       case `Occupied` => '#'
@@ -351,6 +374,10 @@ package object labyrinth {
       } yield lab(x, y)
 
     seqMatrix.map { _.mkString("") }.mkString("\n")
+  }
+
+  def printLab(lab: Labyrinth): String = {
+    labToString(toCharMatrix(lab))
   }
 
   type CommandSignal = Map[LabyrinthCommand.LabyrinthCommand, Double]
@@ -396,7 +423,7 @@ package object labyrinth {
                             goal: Point, path: Path, history: List[LabyrinthCommand.LabyrinthCommand]) {
 
     def toCharMap: DenseMatrix[Char] = {
-      val result = printLab(visionMap)
+      val result = toCharMatrix(visionMap)
 
       path.foreach { p =>
         result(p.point.x, p.point.y) = if (result(p.point.x, p.point.y) == '+') { '*' } else { '+' }
@@ -410,6 +437,17 @@ package object labyrinth {
     override def toString: String = {
       s"LabyrinthStatus(labyrinth: ${labyrinth.rows}x${labyrinth.cols}, " +
         s"position: $robotPosition, direction, goal: $goal, history: ${history.size} commands)"
+    }
+
+    def printVision: String = {
+      val vis = toCharMatrix(visionMap)
+      for (p <- path) {
+        vis(p.point.x, p.point.y) = '.'
+      }
+
+      vis(robotPosition.point.x, robotPosition.point.y) = Direction.id(robotPosition.direction)
+
+      labToString(vis)
     }
   }
 
@@ -433,4 +471,7 @@ package object labyrinth {
 
   abstract class LabyrinthBrain[StateT : ClassTag](dff: DataFlowFormat) extends
     Brain[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback, StateT](dff)
+
+  abstract class LabyrinthBrainFactory extends
+    BrainFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback]
 }

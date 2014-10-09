@@ -45,7 +45,7 @@ class LabyrinthRobot(brain: ActorRef, labyrinthGen: LabyrinthGenerator,
 
   var feedbackStrategy: FeedbackStrategy = null // NULLL!!!!
 
-  override def init = Future.successful {
+  override def init = Future {
     val (lab, start, goal) = labyrinthGen()
 
     val obs = vision(lab, start)
@@ -58,7 +58,7 @@ class LabyrinthRobot(brain: ActorRef, labyrinthGen: LabyrinthGenerator,
     val state = LabyrinthState(visionMap, lab, start, goal, path, history)
     val initialInput = LabyrinthInput(visionMap, start, goal)
 
-    feedbackStrategy = feedbackStrategyGen(state)
+    this.feedbackStrategy = feedbackStrategyGen(state)
 
     (state, Some(initialInput))
   }
@@ -72,6 +72,8 @@ class LabyrinthRobot(brain: ActorRef, labyrinthGen: LabyrinthGenerator,
     obs.impose(state.visionMap)
     val newStatus = LabyrinthState(state.visionMap, state.labyrinth, newPosition, state.goal, path, history)
     val newInput = LabyrinthInput(state.visionMap, newPosition, state.goal)
+
+    log.info(s"\n${state.printVision}")
 
     (newStatus, if (newPosition.point == state.goal) None else Some(newInput))
   }

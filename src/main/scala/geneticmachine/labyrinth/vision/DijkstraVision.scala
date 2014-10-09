@@ -29,7 +29,7 @@ class DijkstraVision(val depth: Int) extends Vision {
       }
 
       if (openFree.nonEmpty) {
-        println(printLab(vision))
+        println(toCharMatrix(vision))
         breadthFirstSearch(openFree, closedSet ++ closedOccupied ++ openSet)
       }
     }

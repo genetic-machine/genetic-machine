@@ -27,7 +27,19 @@ trait RobotFactory[I, O, F, +S] extends Serializable {
 case class RobotResult[+StateT : ClassTag]
   (worldState: StateT,
    metrics: Map[String, Double],
-   continuousMetrics: Map[String, Seq[Double]])
+   continuousMetrics: Map[String, Seq[Double]]) {
+  override def toString: String = {
+    (for {
+      (metricName, stat) <- metrics
+    } yield s"$metricName: $stat").mkString("\n") +
+    (for {
+      (metricName, stats) <- continuousMetrics
+      statsFormatted = stats.map { s: Double =>
+        "%1.0f" format s
+      }
+    } yield s"$metricName: ${statsFormatted.mkString(" ")}").mkString("\n")
+  }
+}
 
 /**
  * Provides shell for correct [[geneticmachine.Brain]] activity.
@@ -145,6 +157,8 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
 
   private final def scoring(state: StateT, output: OutputT): Receive = {
     case FeedbackDone(feedbackData: FeedbackT) =>
+      log.info(s"Feedback: $feedbackData")
+
       context.become {
         waitingAck(state, output)
       }
@@ -158,6 +172,8 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
    */
   private final def waitingOutput(state: StateT): Receive = {
     case Brain.Output(brainOutput: OutputT) =>
+      log.info(s"Brain output: $brainOutput")
+
       context.become {
         scoring(state, brainOutput) orElse
           failureReceive("scoring brain", classOf[FeedbackDone])

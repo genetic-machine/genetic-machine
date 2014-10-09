@@ -2,7 +2,7 @@ package geneticmachine.labyrinth.brain
 
 import geneticmachine.labyrinth._
 import geneticmachine.labyrinth.vision._
-import geneticmachine.genetic.Mutator
+import geneticmachine.genetic._
 
 import common.dataflow.DataFlowFormat._
 
@@ -45,16 +45,24 @@ final case class LabyrinthPattern(matrix: DenseMatrix[Double],
       "pc" -> patternCommand.id
     )
   }
+
+  override def toString: String = {
+    s"$commandCoefficient * $patternCommand + \n${matrix.map {c: Double => (c * 10.0).round / 10.0 } }"
+  }
 }
 
 final case class Gene(pattern: LabyrinthPattern, strength: Double,
-                      currentGain: Double, action: Command) {
+                      currentGain: Double, action: Command) extends Strength {
   def asProps: Map[String, Any] = {
     Map[String, Any](
       "strength" -> strength,
       "current" -> currentGain,
       "command" -> action.id
     ) ++ pattern.asProps
+  }
+
+  override def toString: String = {
+    s"Strength: $strength, gain: $currentGain, action: $action:\n$pattern"
   }
 }
 
@@ -75,7 +83,7 @@ object LabyrinthPatternMutator {
   val crossoverDist = patternDist
 
   val actionDist = for {
-    i <- Rand.randInt(LabyrinthCommand.maxId + 1)
+    i <- Rand.randInt(LabyrinthCommand.maxId)
   } yield LabyrinthCommand(i)
 
   val commandValueDist = new Gamma(1.0, 1.0)
@@ -101,7 +109,7 @@ object LabyrinthPatternMutator {
   }
 }
 
-final class LabyrinthPatternMutator(val patternR: Int) extends Mutator[Gene] {
+final case class LabyrinthPatternMutator(patternR: Int) extends Mutator[Gene] {
 
   import LabyrinthPatternMutator._
 
@@ -129,7 +137,7 @@ final class LabyrinthPatternMutator(val patternR: Int) extends Mutator[Gene] {
 
     val action = withGammaProb(g.strength)(g.action, actionDist.draw())
 
-    Gene(LabyrinthPattern(pattern, patternCommand, patternCommandC), 0.0, 0.0, action)
+    Gene(LabyrinthPattern(pattern, patternCommand, patternCommandC), 1.0, 0.0, action)
   }
 
   /** This method requires careful usage
@@ -158,7 +166,7 @@ final class LabyrinthPatternMutator(val patternR: Int) extends Mutator[Gene] {
     }
   }
 
-  /** Private for inline */
+  @inline
   private def crossoverMean(d1: Double, d2: Double): Double = {
     val noise = LabyrinthPatternMutator.crossoverDist.draw()
     //Gaussian with mean = (d1 + d2) / 2 and std = (d1 - d2) / 2.0
@@ -166,10 +174,12 @@ final class LabyrinthPatternMutator(val patternR: Int) extends Mutator[Gene] {
     (noise * (d1 - d2) + d1 + d2) / 2.0
   }
 
+  @inline
   private def crossoverPatternRadius(r1: Int, r2: Int): Int = {
     new Poisson((r1 + r2) / 2).draw()
   }
 
+  @inline
   private def crossoverCommand(c1: Command, c2: Command): Command = {
     if (c1 == c2) {
       c1
@@ -178,6 +188,7 @@ final class LabyrinthPatternMutator(val patternR: Int) extends Mutator[Gene] {
     }
   }
 
+  @inline
   private def mapPatternCrossover(matrix1: DenseMatrix[Double],
     matrix2: DenseMatrix[Double]): DenseMatrix[Double] = {
     val m1 = matrix1: MapPattern
@@ -204,8 +215,8 @@ final class LabyrinthPatternMutator(val patternR: Int) extends Mutator[Gene] {
     val patternCommandCoef = crossoverMean(g1.pattern.commandCoefficient, g2.pattern.commandCoefficient)
     val action = crossoverCommand(g1.action , g2.action)
 
-    Gene(LabyrinthPattern(mapPattern, patternCommand, patternCommandCoef), 0.0, 0.0, action)
+    Gene(LabyrinthPattern(mapPattern, patternCommand, patternCommandCoef), (g1.strength + g2.strength) / 2.0, 0.0, action)
   }
 }
 
-case class Population(entities: ParVector[Gene], lastAction: Command)
+case class Population(entities: ParVector[Gene], activeGene: Int)

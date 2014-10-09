@@ -30,4 +30,15 @@ package object metrics {
       state.history.size.toDouble
     }
   }
+
+  object CommandNumberToOptimal extends LabyrinthMetric("CommandsToOptimal") {
+    def apply(state: LabyrinthState): Double = {
+      val command = state.history.size.toDouble
+
+      val cost = reverseCostDict(state.labyrinth, state.goal)
+      val optimal = cost(state.path(0)).toDouble
+
+      command / optimal
+    }
+  }
 }
