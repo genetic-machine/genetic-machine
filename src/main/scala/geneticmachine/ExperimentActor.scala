@@ -168,7 +168,7 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
       serialize(brain, lastBrainId, currentFactory, robotSerialization).onComplete {
         case id: Try[Long] =>
           context.self ! ExperimentActor.FinishCycle(id, r)
-      }
+      } // TODO: pipe self
 
     case Guide.GuideResult(Success(`brain`), strangeResult, robotSerialization) =>
       context.unwatch(guide)

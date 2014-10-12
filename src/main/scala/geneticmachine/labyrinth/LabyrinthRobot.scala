@@ -69,13 +69,13 @@ class LabyrinthRobot(brain: ActorRef, labyrinthGen: LabyrinthGenerator,
     val path = newPosition :: state.path
     val history = brainOutput :: state.history
     val obs = vision(state.labyrinth, newPosition)
+
     obs.impose(state.visionMap)
+
     val newStatus = LabyrinthState(state.visionMap, state.labyrinth, newPosition, state.goal, path, history)
     val newInput = LabyrinthInput(state.visionMap, newPosition, state.goal)
 
-    log.info(s"\n${state.printVision}")
-
-    (newStatus, if (newPosition.point == state.goal) None else Some(newInput))
+    (newStatus, if (newPosition.point == state.goal) { None } else { Some(newInput) })
   }
 
   override def feedback(status: LabyrinthState, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
@@ -83,7 +83,7 @@ class LabyrinthRobot(brain: ActorRef, labyrinthGen: LabyrinthGenerator,
   }
 
   override def serialize(status: LabyrinthState): Future[DataFlowFormat] = Future.successful {
-    val builder = DataFlowFormatBuilder(robotLabel)
+    val builder = DataFlowFormatBuilder(robotLabel).withType("Labyrinth Robot")
 
     val input = builder.node("RobotInput").asInput()
     val output = builder.node("BrainScore").asOutput()

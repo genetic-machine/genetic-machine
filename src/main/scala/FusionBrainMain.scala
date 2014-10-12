@@ -1,5 +1,6 @@
 import akka.actor.ActorRef
 import geneticmachine._
+import geneticmachine.labyrinth.utils.LabyrinthInfo
 import labyrinth._
 import brain._
 import genetic._
@@ -20,7 +21,8 @@ object FusionBrainMain {
     val brainFactory = FusionBrainFactory(evolution)
 
     val vision = SimpleVision(5)
-    val labGenerator = ConstantGenerator("src/main/resources/labs/simple.lab")//RandomWalkGenerator(5, 5)(Point(31, 31))
+    val labGenerator = ConstantGenerator("src/main/resources/labs/simple.lab")
+
     val feedback = AdvancedPotentialLaplaceFeedback(1.0, 25.0) & ImpossibleActionFeedback(-25.0)
 
     val metrics = List(EuclideanDistanceToTarget, ManhattanDistanceToTarget)
@@ -31,6 +33,10 @@ object FusionBrainMain {
 
     val machine = new GeneticMachine with Neo4jDB with RemoteControl with RemoteView
 
-    machine(experiment)
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    for (results <- machine(experiment)) {
+      println(results)
+    }
   }
 }

@@ -358,7 +358,7 @@ package object labyrinth {
     matrix
   }
 
-  def toCharMatrix(lab: Labyrinth): DenseMatrix[Char] = {
+  def labToCharMatrix(lab: Labyrinth): DenseMatrix[Char] = {
     lab map {
       case `Free` => ' '
       case `Occupied` => '#'
@@ -366,7 +366,7 @@ package object labyrinth {
     }
   }
 
-  def labToString(lab: DenseMatrix[Char]): String = {
+  def charMatrixToString(lab: DenseMatrix[Char]): String = {
     val seqMatrix = for {
       x <- 0 until lab.rows
     } yield for {
@@ -377,7 +377,7 @@ package object labyrinth {
   }
 
   def printLab(lab: Labyrinth): String = {
-    labToString(toCharMatrix(lab))
+    charMatrixToString(labToCharMatrix(lab))
   }
 
   type CommandSignal = Map[LabyrinthCommand.LabyrinthCommand, Double]
@@ -423,7 +423,7 @@ package object labyrinth {
                             goal: Point, path: Path, history: List[LabyrinthCommand.LabyrinthCommand]) {
 
     def toCharMap: DenseMatrix[Char] = {
-      val result = toCharMatrix(visionMap)
+      val result = labToCharMatrix(visionMap)
 
       path.foreach { p =>
         result(p.point.x, p.point.y) = if (result(p.point.x, p.point.y) == '+') { '*' } else { '+' }
@@ -440,14 +440,14 @@ package object labyrinth {
     }
 
     def printVision: String = {
-      val vis = toCharMatrix(visionMap)
+      val vis = labToCharMatrix(visionMap)
       for (p <- path) {
         vis(p.point.x, p.point.y) = '.'
       }
 
       vis(robotPosition.point.x, robotPosition.point.y) = Direction.id(robotPosition.direction)
 
-      labToString(vis)
+      charMatrixToString(vis)
     }
   }
 

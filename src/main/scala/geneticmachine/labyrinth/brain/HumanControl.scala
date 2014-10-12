@@ -33,11 +33,11 @@ class HumanControl(dff: DataFlowFormat) extends LabyrinthBrain[Integer](dff) {
 
   override def input(state: Integer, inputData: LabyrinthInput): Future[(Integer, LabyrinthCommand)] = Future {
     val obs = inputData.observation.orientated
-    val cm = toCharMatrix(obs.visionMap)
+    val cm = labToCharMatrix(obs.visionMap)
     val rp = obs.from
     cm(rp.point.x, rp.point.y) = Direction.id(rp.direction)
     log.info(s"Input on $state")
-    log.info(s"\n${ labToString(cm) }")
+    log.info(s"\n${ charMatrixToString(cm) }")
 
     (state + 1: Integer, getCommand())
   }
