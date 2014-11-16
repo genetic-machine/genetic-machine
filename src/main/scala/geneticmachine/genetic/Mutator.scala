@@ -7,6 +7,16 @@ trait Mutator[T] extends Serializable {
   /** That is how the life appeared. **/
   def generation(): T
 
+  /**
+   * 0-arity mutation, 'vectorized' version.
+   *
+   * Allow to control generation structure, for example,
+   * for generation 0.25 `size` by method 1 and 0.75 of `size` by method 2.
+   */
+  def generation(size: Int): Vector[T] = {
+    Vector.fill(size)(generation())
+  }
+
   /** 1-arity mutation **/
   /** That is how the life evolved firstly. **/
   def pointMutation(gene: T): T
