@@ -12,7 +12,10 @@ import geneticmachine.labyrinth._
  * only optimal (by heuristic) commands have value `1.0`.
  * Non-optimal commands are marked with zero value.
  */
-object DijkstraHeuristicSensor extends LabyrinthHeuristic {
+object DijkstraSense extends LabyrinthSense {
+
+  val senseNames = Seq("TurnLeft", "Forward", "TurnRight")
+
   private def argmin[K, V : Ordering](kvs: Seq[(K, V)]): Seq[K] = {
     val min: V = kvs.min {
       Ordering by { kv: (K, V) => kv._2 }

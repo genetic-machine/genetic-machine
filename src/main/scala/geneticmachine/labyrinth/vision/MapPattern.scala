@@ -10,7 +10,7 @@ final class MapPattern(val matrix: DenseMatrix[Double]) extends Pattern {
   val patternRadius: Point = Point((matrix.rows - 1) / 2, (matrix.cols - 1) / 2)
 
   /** Some kind of convolution **/
-  def *(observation: Observation): Double = {
+  def *(observation: VisionObservation): Double = {
     val from = observation.from.point
     val maxVisionPoint = Point(observation.visionMap.rows - 1, observation.visionMap.cols - 1)
 
@@ -30,7 +30,7 @@ final class MapPattern(val matrix: DenseMatrix[Double]) extends Pattern {
     anormedConvolution / statSum
   }
 
-  def apply(observation: Observation): Double = this * observation
+  def apply(observation: VisionObservation): Double = this * observation
 
   def +(other: MapPattern): MapPattern = MapPattern {
     this.matrix + other.matrix
@@ -86,6 +86,8 @@ object MapPattern {
     val m = DenseMatrix.fill(size, size)(value)
     new MapPattern(m)
   }
+
+  import scala.language.implicitConversions
 
   implicit def matrixAsPattern(m: DenseMatrix[Double]): MapPattern = MapPattern(m)
 }

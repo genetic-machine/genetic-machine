@@ -1,5 +1,6 @@
 package geneticmachine.labyrinth
 
+import geneticmachine.labyrinth.utils.LabyrinthInfo
 import geneticmachine.{RobotFactory, Robot, Metric, ContinuousMetric}
 
 import akka.actor.{Props, ActorRef}
@@ -78,8 +79,12 @@ class LabyrinthRobot(brain: ActorRef, labyrinthGen: LabyrinthGenerator,
     (newStatus, if (newPosition.point == state.goal) { None } else { Some(newInput) })
   }
 
-  override def feedback(status: LabyrinthState, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
-    LabyrinthFeedback(feedbackStrategy(status, brainOutput))
+  override def feedback(state: LabyrinthState, brainOutput: LabyrinthCommand.LabyrinthCommand) = Future {
+    if (state.history.size % 10 == 0) {
+      log.info(s"\n${LabyrinthInfo.formatLabyrinthState(state)}")
+    }
+
+    LabyrinthFeedback(feedbackStrategy(state, brainOutput))
   }
 
   override def serialize(status: LabyrinthState): Future[DataFlowFormat] = Future.successful {

@@ -43,6 +43,41 @@ package object labyrinth {
     def free(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Free)
 
     def toArray(lab: Labyrinth): (Array[CellStatus], Int, Int) = matrixToArray(lab)
+
+    def copy[A : ClassTag](m: DenseMatrix[A], from: Point, to: Point)(zero: A): DenseMatrix[A] = {
+      val cm = DenseMatrix.fill[A](to.x - from.x, to.y - from.y)(zero)
+
+      for (i <- (from.x max 0) to (to.x min (m.rows - 1));
+           j <- (from.y max 0) to (to.y min (m.cols - 1))) {
+        val copyI = i - from.x
+        val copyJ = j - from.y
+        cm(copyI, copyJ) = cm(i, j)
+      }
+
+      cm
+    }
+
+    def copy[A: ClassTag](m: DenseMatrix[A], from: Point, r: Int)(zero: A): DenseMatrix[A] = {
+      copy(m, from - r, from + r)(zero)
+    }
+
+    def centredImpose(f: (CellStatus, Double) => Double)(map: DenseMatrix[CellStatus], from: Point)
+                     (pattern: DenseMatrix[Double]): DenseMatrix[Double] = {
+
+      val r = ((pattern.rows - 1) / 2) min ((pattern.cols - 1) / 2)
+      val min = (from - r) max Point.zero
+      val max = (from + r) min Point(map.rows - 1, map.cols - 1)
+
+      val m = DenseMatrix.zeros[Double](pattern.rows, pattern.cols)
+
+      for (i <- min.x to max.x ; j <- min.y to max.y) {
+        val v1 = map(i, j)
+        val v2 = pattern(i - min.x, j - min.y)
+        m(i - min.x, j - min.y) = f(v1, v2)
+      }
+
+      m
+    }
   }
 
   type CostMap = DenseMatrix[Int]
@@ -64,7 +99,11 @@ package object labyrinth {
 
     def neighbors: Seq[Point] = Seq(left, right, backward, forward)
 
+    def +(num: Int): Point = Point(this.x + num, this.y + num)
+
     def +(other: Point) = Point(this.x + other.x, this.y + other.y)
+
+    def -(num: Int): Point = this + (-num)
 
     def -(other: Point) = Point(this.x - other.x, this.y - other.y)
 
@@ -80,6 +119,9 @@ package object labyrinth {
       this.y * other.x + this.x * other.y)
 
     def *(scale: Int) = Point(this.x * scale, this.y * scale)
+
+    /** Vector multiplication **/
+    def <*>(other: Point): Int = this.x * other.x + this.y * other.y
 
     def max(other: Point) = Point(this.x max other.x, this.y max other.y)
     def min(other: Point) = Point(this.x min other.x, this.y min other.y)
@@ -415,7 +457,7 @@ package object labyrinth {
   }
 
   case class LabyrinthInput(lab: Labyrinth, robotPosition: RobotPosition, goal: Point) {
-    def observation: Observation = Observation(lab, robotPosition).orientated
+    def observation: VisionObservation = VisionObservation(lab, robotPosition).orientated
   }
 
   case class LabyrinthState(visionMap: Labyrinth, labyrinth: Labyrinth,
@@ -448,16 +490,6 @@ package object labyrinth {
       vis(robotPosition.point.x, robotPosition.point.y) = Direction.id(robotPosition.direction)
 
       charMatrixToString(vis)
-    }
-  }
-
-  trait LabyrinthHeuristic extends (LabyrinthInput => CommandSignal) {
-    override def toString: String = "Incomplete Labyrinth Heuristic"
-
-    final def optimalCommand(input: LabyrinthInput): LabyrinthCommand.LabyrinthCommand = {
-      this(input).maxBy {
-        kv: (LabyrinthCommand.LabyrinthCommand, Double) => kv._2
-      }._1
     }
   }
 

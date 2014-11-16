@@ -2,10 +2,10 @@ package geneticmachine.labyrinth
 
 package object vision {
   trait Vision extends Serializable {
-    def apply(labyrinth: Labyrinth, from: RobotPosition): Observation
+    def apply(labyrinth: Labyrinth, from: RobotPosition): VisionObservation
   }
 
-  final case class Observation(visionMap: Labyrinth, from: RobotPosition) {
+  final case class VisionObservation(visionMap: Labyrinth, from: RobotPosition) {
 
     override def toString: String = s"Observation($from):\n$visionMap"
 
@@ -45,22 +45,22 @@ package object vision {
 
     def turnNorth = this
 
-    def turnEast: Observation = {
+    def turnEast: VisionObservation = {
       val tPos = RobotPosition(from.point.map(eastTransform), from.direction.turnRight)
-      Observation(turn(eastTransform, (visionMap.cols, visionMap.rows)), tPos)
+      VisionObservation(turn(eastTransform, (visionMap.cols, visionMap.rows)), tPos)
     }
 
-    def turnWest: Observation = {
+    def turnWest: VisionObservation = {
       val tPos = RobotPosition(from.point.map(westTransform), from.direction.turnLeft)
-      Observation(turn(westTransform, (visionMap.cols, visionMap.rows)), tPos)
+      VisionObservation(turn(westTransform, (visionMap.cols, visionMap.rows)), tPos)
     }
 
-    def turnSouth: Observation = {
+    def turnSouth: VisionObservation = {
       val tPos = RobotPosition(from.point.map(southTransform), from.direction.reverse)
-      Observation(turn(southTransform, (visionMap.rows, visionMap.cols)), tPos)
+      VisionObservation(turn(southTransform, (visionMap.rows, visionMap.cols)), tPos)
     }
 
-    def orientated: Observation = from.direction match {
+    def orientated: VisionObservation = from.direction match {
       case Direction.North => turnNorth
       case Direction.South => turnSouth
       case Direction.West => turnWest
@@ -68,5 +68,5 @@ package object vision {
     }
   }
 
-  type Pattern = (Observation) => Double
+  type Pattern = (VisionObservation) => Double
 }

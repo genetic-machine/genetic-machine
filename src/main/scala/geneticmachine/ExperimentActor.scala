@@ -4,8 +4,9 @@ import akka.actor.SupervisorStrategy.Stop
 import akka.actor._
 import common.MessageProtocol
 import common.dataflow.DataFlowFormat
+import geneticmachine.Experiment.CycleResult
 import geneticmachine.db.DBActor._
-import akka.pattern.ask
+import akka.pattern._
 
 import scala.collection.immutable.Queue
 import scala.concurrent.Future
@@ -19,9 +20,15 @@ object ExperimentActor {
   val dbTimeout = 10.second
   val serializeTimeout = 1.minute
 
-  case class ExperimentResult[S : ClassTag](result: List[(Try[S], Try[Long])]) extends MessageProtocol.Response
+  case class ExperimentResult[S : ClassTag](results: List[CycleResult[S]]) extends MessageProtocol.Response
 
-  case class FinishCycle[S : ClassTag](brainId: Try[Long], result: Try[S]) extends MessageProtocol.Request
+  case class FinishCycle[S : ClassTag](cycleResult: CycleResult[S]) extends MessageProtocol.Request
+
+  object FinishCycle {
+    def apply[S : ClassTag](rr: Try[RobotResult[S]], id: Try[Long]): FinishCycle[S] = {
+      new FinishCycle(CycleResult(rr, id))
+    }
+  }
 }
 
 import ExperimentActor.ExperimentResult
@@ -41,33 +48,36 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
       /** dbActor returns dff already injected with its id. **/
       val load = for {
         Loaded(dff) <- dbActor.ask(Load(id))(ExperimentActor.dbTimeout)
-      } yield dff
+      } yield Success(dff)
 
-      load.onComplete {
-        case dff =>
-          context.self.tell(dff, requester)
-      }
+      load.recover {
+        case e: Throwable =>
+          Failure(e)
+      }.pipeTo(self)(requester)
+
     } else {
       val emptyDff = experiment.brainFactory.empty
       /** But here injection is needed. **/
       val save = for {
         Saved(id) <- dbActor.ask(Save(emptyDff))(ExperimentActor.dbTimeout)
         injected = emptyDff.idInjection(id)
-      } yield injected
+      } yield Success(injected)
 
-      save.onComplete {
-        case dff =>
-          context.self.tell(dff, requester)
-      }
+      save.recover {
+        case e: Throwable =>
+          Failure(e)
+      }.pipeTo(self)(requester)
     }
   }
 
   def execute(requester: ActorRef, brain: ActorRef,
-              queue: Queue[RobotFactory[_, _, _, S]], results: List[(Try[S], Try[Long])],
+              queue: Queue[RobotFactory[_, _, _, S]], results: List[CycleResult[S]],
               lastBrainId: Long) {
 
     def launchGuide(robotFactory: RobotFactory[_, _, _, S]): ActorRef = {
-      context.actorOf(Props(new Guide(brain, robotFactory, ExperimentActor.guideTimeout)), "guide")
+      val guide = context.actorOf(Props(new Guide(brain, robotFactory, ExperimentActor.guideTimeout)), "guide")
+      log.debug(s"Guide $guide was launched!")
+      guide
     }
 
     queue.dequeueOption match {
@@ -82,12 +92,15 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
         context.unwatch(brain)
         context.stop(brain)
         log.info(s"Experiment finished. Last brain id: $lastBrainId")
-        requester ! ExperimentResult[S](results)
+        log.debug(s"Requester: $requester")
+        requester ! ExperimentResult(results.reverse)
     }
   }
 
-  def panicShutdown(requester: ActorRef, rest: Queue[RobotFactory[_, _, _, S]], results: List[(Try[S], Try[Long])], cause: Throwable) {
-    val f = (Failure(cause), Failure(cause))
+  def panicShutdown(requester: ActorRef, rest: Queue[RobotFactory[_, _, _, S]],
+                    results: List[CycleResult[S]], cause: Throwable) {
+
+    val f = CycleResult(Failure(cause), Failure(cause))
     log.error(cause, "panic shutdown!")
     val finalResults = results.reverse ::: rest.map { _ => f }.toList
     requester ! ExperimentResult(finalResults)
@@ -137,7 +150,7 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
   }
 
   def waitResults(requester: ActorRef, brain: ActorRef, currentFactory: RobotFactory[_, _, _, S],
-                  rest: Queue[RobotFactory[_, _, _, S]], results: List[(Try[S], Try[Long])], lastBrainId: Long,
+                  rest: Queue[RobotFactory[_, _, _, S]], results: List[CycleResult[S]], lastBrainId: Long,
                   guide: ActorRef): Receive = {
     case t@Terminated(`brain`) =>
       context.unwatch(guide)
@@ -155,36 +168,39 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
     case t@Terminated(`guide`) =>
       log.error(s"Guide $guide terminated! This must not happen!")
       val cause = new MessageProtocol.UnexpectedResponse("Guide terminated!!!", t, "Some result")
-      val r: Try[S] = Failure(cause)
+      val r: Try[RobotResult[S]] = Failure(cause)
 
       serialize(brain, lastBrainId, currentFactory, Failure(cause)).onComplete {
         case id: Try[Long] =>
-          context.self ! ExperimentActor.FinishCycle(id, r)
+          context.self ! ExperimentActor.FinishCycle(r, id)
       }
 
-    case Guide.GuideResult(Success(`brain`), r: Try[S], robotSerialization) =>
+    case Guide.GuideResult(Success(`brain`), r: Try[RobotResult[S]], robotSerialization) =>
       context.unwatch(guide)
       context.stop(guide)
-      serialize(brain, lastBrainId, currentFactory, robotSerialization).onComplete {
-        case id: Try[Long] =>
-          context.self ! ExperimentActor.FinishCycle(id, r)
-      } // TODO: pipe self
+
+      (for {
+        id <- serialize(brain, lastBrainId, currentFactory, robotSerialization)
+      } yield ExperimentActor.FinishCycle(CycleResult(r, Success(id)))).recover {
+        case e: Throwable =>
+          ExperimentActor.FinishCycle(r, Failure(e))
+      } pipeTo context.self
 
     case Guide.GuideResult(Success(`brain`), strangeResult, robotSerialization) =>
       context.unwatch(guide)
       context.stop(guide)
-      val r: Try[S] = Failure(new MessageProtocol.UnexpectedResponse("Result type mismatch", strangeResult, "Try[S]"))
+      val r: Try[RobotResult[S]] = Failure(new MessageProtocol.UnexpectedResponse("Result type mismatch", strangeResult, "Try[S]"))
       serialize(brain, lastBrainId, currentFactory, robotSerialization).onComplete {
         case id: Try[Long] =>
-          context.self ! ExperimentActor.FinishCycle(id, r)
+          context.self ! ExperimentActor.FinishCycle(r, id)
       }
 
-    case ExperimentActor.FinishCycle(id: Try[Long], r: Try[S]) =>
+    case ExperimentActor.FinishCycle(CycleResult(r: Try[RobotResult[S]], id: Try[Long])) =>
       if (id.isFailure) {
         log.warning(s"Brain serialization failed! $id Continue without saving.")
       }
 
-      execute(requester, brain, rest, (r, id) :: results, id.getOrElse(lastBrainId))
+      execute(requester, brain, rest, CycleResult(r, id) :: results, id.getOrElse(lastBrainId))
 
     case msg =>
       log.warning(s"Unexpected message during experiment: $msg.")
@@ -192,9 +208,11 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
 
   def receive: Receive = {
     case MessageProtocol.Init =>
+      log.debug("Experiment was initialized.")
       loadBrain(context.sender())
 
     case Success(dff: DataFlowFormat) =>
+      log.debug("Brain was loaded.")
       if (dff.id.isDefined) {
         val brain = context.actorOf(experiment.brainFactory.props(dff), "Brain")
         context.watch(brain)
@@ -207,5 +225,8 @@ class ExperimentActor[S : ClassTag](val experiment: Experiment[_, _, _, S], val 
     case msg@Failure(e: Throwable) =>
       val cause = new MessageProtocol.InitializationFailure(e)
       panicShutdown(context.sender(), experiment.cycles, Nil, cause)
+
+    case msg =>
+      log.debug(s"Unknown response $msg!")
   }
 }

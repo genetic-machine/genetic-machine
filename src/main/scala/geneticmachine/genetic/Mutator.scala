@@ -12,9 +12,10 @@ trait Mutator[T] extends Serializable {
   def pointMutation(gene: T): T
 
   /** 1-arity mutation, 'vectorized' version. **/
-  /** Since there is almost only one use-case of point mutation
-    *  reimplementation might speed up mutation.
-    */
+  /**
+   * Since there is almost only one use-case of point mutation
+   *  reimplementation might speed up mutation.
+   */
   def pointMutation(genes: Vector[T]): Vector[T] = {
     genes.map(pointMutation)
   }
@@ -49,4 +50,13 @@ trait Mutator[T] extends Serializable {
   final def apply(g1: T, g2: T): T = crossover(g1, g2)
 
   final def apply(gs: Vector[T]): Vector[T] = massiveMutation(gs)
+}
+
+/**
+ * Adaptation extends mutation by adding
+ * @tparam G type of genes
+ * @tparam I type of input
+ */
+trait Adaptation[G, I] {
+  def apply(input: I): Mutator[G]
 }

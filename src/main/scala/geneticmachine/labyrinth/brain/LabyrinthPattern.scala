@@ -1,6 +1,7 @@
 package geneticmachine.labyrinth.brain
 
 import geneticmachine.labyrinth._
+import geneticmachine.labyrinth.brain.InnerObservation
 import geneticmachine.labyrinth.vision._
 import geneticmachine.genetic._
 
@@ -17,22 +18,32 @@ object LabyrinthPattern {
       flatMatrix <- props.getAs[Array[Double]]("matrix")
       rows <- props.getAs[Int]("rows")
       cols <- props.getAs[Int]("cols")
-      commandCoefficient <- props.getAs[Double]("cc")
-      patternCommand <- props.getAs[Int]("pc")
+      coefs <- props.getAs[Array[Double]]("coefs")
       matrix = matrixFromArray(flatMatrix, rows, cols)
-    } yield LabyrinthPattern(matrix, LabyrinthCommand(patternCommand), commandCoefficient)
+    } yield LabyrinthPattern(matrix, coefs)
   }
   
   type Command = LabyrinthCommand.LabyrinthCommand
+
+  /**
+   * Vector multiplication: c' * v.
+   * If some values or coefs are missing, they are assumed to be zero.
+   */
+  def convolution(coefs: Array[Double], values: Array[Double]): Double = {
+    (for {
+      (c, v) <- coefs.zip(values)
+    } yield c * v).sum
+  }
 }
 
 import LabyrinthPattern._
 
-final case class LabyrinthPattern(matrix: DenseMatrix[Double],
-                                  patternCommand: Command, commandCoefficient: Double) {
+final case class LabyrinthPattern(matrix: DenseMatrix[Double], abstractCoefs: Array[Double]) {
 
-  def compare(obs: Observation, commandSignal: CommandSignal): Double = {
-    (matrix: MapPattern) * obs + commandCoefficient * commandSignal(patternCommand)
+  val statSum = 1.0 + abstractCoefs.map(math.abs).sum
+
+  def compare(obs: VisionObservation, abstractSignal: Array[Double]): Double = {
+    ((matrix: MapPattern) * obs + convolution(abstractCoefs, abstractSignal)) / statSum
   }
 
   def asProps: Map[String, Any] = {
@@ -41,44 +52,54 @@ final case class LabyrinthPattern(matrix: DenseMatrix[Double],
       "matrix" -> flatMatrix,
       "rows" -> rows,
       "cols" -> cols,
-      "cc" -> commandCoefficient,
-      "pc" -> patternCommand.id
+      "coefs" -> abstractCoefs
     )
   }
 
   override def toString: String = {
-    s"$commandCoefficient * $patternCommand + \n${matrix.map {c: Double => (c * 10.0).round / 10.0 } }"
-  }
-}
+    val abstractEquation = (for {
+      (x, i) <- abstractCoefs.zipWithIndex
+    } yield s"$x s$i").mkString(" + ")
 
-final case class Gene(pattern: LabyrinthPattern, strength: Double,
-                      currentGain: Double, action: Command) extends Strength {
-  def asProps: Map[String, Any] = {
-    Map[String, Any](
-      "strength" -> strength,
-      "current" -> currentGain,
-      "command" -> action.id
-    ) ++ pattern.asProps
-  }
-
-  override def toString: String = {
-    s"Strength: $strength, gain: $currentGain, action: $action:\n$pattern"
+    s"$abstractEquation + \n${matrix.map {c: Double => (c * 10.0).round / 10.0 } }"
   }
 }
 
 object Gene {
+
+  def apply(pattern: LabyrinthPattern, action: Command)
+           (strength: Double, currentGain: Double): Gene = {
+    new Gene(pattern, action)(strength, currentGain)
+  }
+
   def fromProps(props: Map[String, Any]): Option[Gene] = {
     for {
       strength <- props.getAs[Double]("strength")
-      currentGain <- props.getAs[Double]("current")
-      command <- props.getAs[Int]("command")
+      currentGain <- props.getAs[Double]("gain")
+      action <- props.getAs[Int]("action")
       pattern <- LabyrinthPattern.fromProps(props)
-    } yield Gene(pattern, strength, currentGain, LabyrinthCommand(command))
+    } yield Gene(pattern, LabyrinthCommand(action))(strength, currentGain)
   }
 }
 
-object LabyrinthPatternMutator {
+final class Gene(val pattern: LabyrinthPattern, val action: Command)
+                (val strength: Double, val currentGain: Double) extends Strength {
+  def asProps: Map[String, Any] = {
+    Map[String, Any](
+      "strength" -> strength,
+      "gain" -> currentGain,
+      "action" -> action.id
+    ) ++ pattern.asProps
+  }
+
+  override def toString: String = {
+    s"Strength: $strength, gain: $currentGain, action: $action\n$pattern"
+  }
+}
+
+object AdaptiveLabyrinthMutator {
   val patternDist = new Gaussian(0.0, 1.0)
+  val coefDist = new Gaussian(0.0, 1.0)
 
   val crossoverDist = patternDist
 
@@ -86,7 +107,14 @@ object LabyrinthPatternMutator {
     i <- Rand.randInt(LabyrinthCommand.maxId)
   } yield LabyrinthCommand(i)
 
-  val commandValueDist = new Gamma(1.0, 1.0)
+  val exceptDist = Rand.randInt(LabyrinthCommand.maxId - 1)
+
+  def actionDistExcept(action: LabyrinthCommand.LabyrinthCommand): LabyrinthCommand.LabyrinthCommand = {
+    val a = exceptDist.draw()
+    LabyrinthCommand {
+      if (a == action.id) { LabyrinthCommand.maxId } else { a }
+    }
+  }
 
   private val uniform = new Uniform(0.0, 1.0)
   private val gamma = new Gamma(1.0, 1.0)
@@ -99,7 +127,6 @@ object LabyrinthPatternMutator {
     }
   }
 
-  /** Seems to be faster than x: => A for simple x */
   def withGammaProb[A](p: Double)(left: A, right: A): A = {
     if (gamma.draw() < p) {
       left
@@ -107,44 +134,50 @@ object LabyrinthPatternMutator {
       right
     }
   }
+
+  def logistic(alpha: Double)(x: Double): Double = {
+    1.0 / (1.0 + math.exp(- x * alpha))
+  }
 }
 
-final case class LabyrinthPatternMutator(patternR: Int) extends Mutator[Gene] {
+final case class PostObservation(obs: InnerObservation, command: LabyrinthCommand.LabyrinthCommand, feedback: Double)
 
-  import LabyrinthPatternMutator._
+final case class AdaptiveLabyrinthMutator(patternR: Int, additionalCoefsLen: Int, learningSpeed: Double)
+                                         (postObs: PostObservation)
+  extends Mutator[Gene] {
+
+  import AdaptiveLabyrinthMutator._
 
   override def generation(): Gene = {
-    val pattern = DenseMatrix.zeros[Double](2 * patternR + 1, 2 * patternR + 1).map { _ =>
-      patternDist.draw()
+    val currentVision = Labyrinth.copy(postObs.obs.vision, postObs.obs.from.point, patternR)(0: Int).map { _.toDouble }
+
+    val pattern = currentVision.map { _ + patternDist.draw() }
+
+    val coefs = postObs.obs.senses.map { s => scala.math.signum(s) + coefDist.draw() }
+
+    val action = if (postObs.feedback >= 0.0) {
+      postObs.command
+    } else {
+      actionDistExcept(postObs.command)
     }
 
-    val patternCommand = actionDist.draw()
-    val commandValue = commandValueDist.draw()
-
-    val action = actionDist.draw()
-
-    Gene(LabyrinthPattern(pattern, patternCommand, commandValue), 0.0, 0.0, action)
+    Gene(LabyrinthPattern(pattern, coefs), action)(0.0, 0.0)
   }
 
-  private def pointMutation(g: Gene, strength: Double): Gene = {
-    val pattern = g.pattern.matrix.copy
-    pattern.map { c: Double =>
-      c + patternDist.draw()
+  def adopt(g: Gene): Gene = {
+    val pattern = g.pattern.matrix
+
+    val similarity = logistic(learningSpeed)(g.currentGain)
+
+    val mPattern = Labyrinth.centredImpose { (v, p) =>
+      p + (v - p) * similarity * postObs.feedback + (1 - similarity) * patternDist.draw()
+    }(postObs.obs.vision, postObs.obs.from.point)(pattern)
+
+    val coefs = g.pattern.abstractCoefs.zip(postObs.obs.senses) { case (c: Double, s: Double) =>
+        c + similarity * (math.signum(s) - c) * postObs.feedback + (1 - similarity) * coefDist.draw()
     }
 
-    val patternCommandC = g.pattern.commandCoefficient * commandValueDist.draw()
-    val patternCommand = withGammaProb(g.strength)(g.pattern.patternCommand, actionDist.draw())
-
-    val action = withGammaProb(g.strength)(g.action, actionDist.draw())
-
-    Gene(LabyrinthPattern(pattern, patternCommand, patternCommandC), 1.0, 0.0, action)
-  }
-
-  /** This method requires careful usage
-   *  since mutation of `patternCommand` and `action` depends on __unnormed__ `strength` of the gene.
-   */
-  override def pointMutation(g: Gene): Gene = {
-    pointMutation(g, g.strength)
+    Gene(LabyrinthPattern(mPattern, coefs), g.action)(0.0, 0.0)
   }
 
   /**
@@ -168,9 +201,7 @@ final case class LabyrinthPatternMutator(patternR: Int) extends Mutator[Gene] {
 
   @inline
   private def crossoverMean(d1: Double, d2: Double): Double = {
-    val noise = LabyrinthPatternMutator.crossoverDist.draw()
-    //Gaussian with mean = (d1 + d2) / 2 and std = (d1 - d2) / 2.0
-    // this shouldn't loose precision... Anyway it uses random, so what is about precision again?
+    val noise = AdaptiveLabyrinthMutator.crossoverDist.draw()
     (noise * (d1 - d2) + d1 + d2) / 2.0
   }
 

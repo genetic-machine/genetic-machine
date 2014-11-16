@@ -40,6 +40,6 @@ resolvers ++= Seq(
   "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
 )
 
-libraryDependencies += "org.neo4j" % "neo4j" % "2.1.2"
+libraryDependencies += "org.neo4j" % "neo4j" % "2.1.4"
 
 libraryDependencies += "org.scala-lang" %% "scala-pickling" % "0.8.0"

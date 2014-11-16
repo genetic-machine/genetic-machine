@@ -5,8 +5,10 @@ import akka.pattern.ask
 import com.typesafe.config.ConfigFactory
 import common.{ MessageProtocol, ViewProtocol }
 import common.dataflow.DataFlowFormat
+import geneticmachine.ExperimentActor.ExperimentResult
 import geneticmachine._
 import geneticmachine.db.Neo4JActor
+import org.neo4j.cypher.internal.compiler.v1_9.ExecutionContext
 import scala.concurrent.duration._
 
 import scala.concurrent.Future
@@ -14,6 +16,10 @@ import scala.concurrent.Future
 abstract class Machine(val systemName: String = "GeneticMachine",
                        val configPath: String = "genetic-machine.conf") extends ExperimentContext {
   val system = ActorSystem(systemName, ConfigFactory.load(configPath))
+
+  def log(message: Any) = system.log.info(s"$message")
+  def logError(error: Throwable, message: Any = "") = system.log.error(error, s"$message")
+
   implicit val dispatcher = system.dispatcher
 
   def shutdown() { system.shutdown(); system.awaitTermination() }
@@ -43,18 +49,17 @@ abstract class GeneticMachine(systemName: String = "GeneticMachine",
 
   val experimentTimeout = 1.hour
 
-  override def executeUntypedExperiment(experiment: Experiment[_, _, _, _]): Future[Any] = {
+  override def executeUntypedExperiment(experiment: Experiment[_, _, _, _]): Future[ExperimentResult[_]] = {
     val experimentActor = system.actorOf(Props(new ExperimentActor(experiment, dbActor)))
     val experimentResult = experimentActor.ask(MessageProtocol.Init)(experimentTimeout)
 
     experimentResult.onComplete {
-      case _ =>
+      case result =>
+        system.log.debug(s"Finish experiment $result;")
         system.stop(experimentActor)
     }
 
-    for {
-      ExperimentActor.ExperimentResult(result) <- experimentResult
-    } yield result
+    experimentResult.mapTo[ExperimentResult[_]]
   }
 }
 
@@ -67,7 +72,7 @@ class MirrorMachine(val mirroringSystemUrl: String = "GeneticMachine@127.0.0.1:7
   val experimentTimeout = 1.hour
   val resolvingTimeout = 5.seconds
 
-  override def executeUntypedExperiment(ex: Experiment[_, _, _, _]): Future[Any] = {
+  override def executeUntypedExperiment(ex: Experiment[_, _, _, _]): Future[ExperimentResult[_]] = {
     val resolving = receptionistSelection.resolveOne(resolvingTimeout)
     resolving.onFailure {
       case e: Throwable =>
@@ -77,7 +82,7 @@ class MirrorMachine(val mirroringSystemUrl: String = "GeneticMachine@127.0.0.1:7
 
     for {
       receptionist <- resolving
-      result <- receptionist.ask(ex)(experimentTimeout)
+      result <- receptionist.ask(ex)(experimentTimeout).mapTo[ExperimentResult[_]]
     } yield result
   }
 }

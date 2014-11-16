@@ -1,8 +1,12 @@
 package geneticmachine.labyrinth.utils
 
 import breeze.linalg.DenseMatrix
+import geneticmachine.Experiment.CycleResult
+import geneticmachine.ExperimentActor.ExperimentResult
 import geneticmachine.RobotResult
 import geneticmachine.labyrinth._
+
+import scala.util.{Failure, Success}
 
 object LabyrinthInfo {
   import Direction._
@@ -22,7 +26,8 @@ object LabyrinthInfo {
     hist.foldLeft(Map.empty[Point, Map[Direction, Int]])(foldPoint)
   }
 
-  private val maneuverSymbol = '+'
+  private val turnSymbol = '+'
+  private val returnSymbol = '-'
   private val messSymbol = '*'
   private val strangeSymbol = '?'
   private val goalSymbol = 'X'
@@ -33,18 +38,18 @@ object LabyrinthInfo {
     } else {
       val visited = pHist.map { kv: (Direction, Int) => kv._2}.sum
 
-      val maneuver: Boolean = pHist.forall { kv: (Direction, Int) =>
-        kv._2 <= 1
-      }
+      pHist.keys.toList match {
+        case d :: Nil if visited == 1 =>
+          Direction.id(d)
 
-      if (maneuver && visited < 3) {
-        if (visited == 1) {
-          Direction.id(pHist.keys.head)
-        } else {
-          maneuverSymbol
-        }
-      } else {
-        messSymbol
+        case d1 :: d2 :: Nil if (d1 == d2.reverse) && visited == 2 =>
+          returnSymbol
+
+        case d1 :: d2 :: Nil if (d1 <*> d2) == 0 && visited == 2 =>
+          turnSymbol
+
+        case _ =>
+          messSymbol
       }
     }
   }
@@ -64,17 +69,45 @@ object LabyrinthInfo {
     m
   }
 
-  def horzConcat(f1: String, f2: String, sep: String = " | "): String = {
-    val ll1 = f1.lines
-    val ll2 = f2.lines
+  def horzConcat(header1: String = "", header2: String = "")(f1: String, f2: String, sep: String = "  |  "): String = {
 
-    val w1 = ll1.map { _.length }.max
-    val w2 = ll2.map { _.length }.max
+    def center(s: String, w: Int): String = {
+      val wLeft = (w - s.size) / 2
+      s"${" " * wLeft}$s${" " * (w - s.size - wLeft)}"
+    }
+
+    val ll1 = f1.lines.toList
+    val ll2 = f2.lines.toList
+
+    val w1 = (header1 :: ll1).map { _.length }.max
+    val w2 = (header2 :: ll2).map { _.length }.max
 
     val ff = ll1.zipAll(ll2, "", "")
-    ff.map { ll =>
-      s"${ll._1}${" " * (w1 - ll._1.length)}${sep}${ll._2}${" " * (w2 - ll._2.length)}"
+
+    val header = s"${center(header1, w1)}$sep${center(header2, w2)}"
+
+    val splitter = s"${" " * w1}$sep${" " * w2}"
+
+    val body = ff.map { ll =>
+      s"${ll._1}${" " * (w1 - ll._1.length)}$sep${ll._2}${" " * (w2 - ll._2.length)}"
     }.mkString("\n")
+
+    s"$header\n$splitter\n$body"
+  }
+
+  def formatLabyrinthState(state: LabyrinthState): String = {
+    val hist = historyToDict(state.path)
+
+    def getFig(lab: Labyrinth): String = {
+      charMatrixToString {
+        val m = applyHistoryDict(labToCharMatrix(lab), hist)
+        val goal = state.goal
+        m(goal.x, goal.y) = goalSymbol
+        m
+      }
+    }
+
+    horzConcat("Actual map", "Vision map")(getFig(state.labyrinth), getFig(state.visionMap))
   }
 
   /**
@@ -92,33 +125,37 @@ object LabyrinthInfo {
    *
    */
   def formatInfo(result: RobotResult[LabyrinthState]): String = {
-    val wState = result.worldState
-
-    val hist = historyToDict(wState.path)
-
-    def getFig(lab: Labyrinth): String = {
-      charMatrixToString {
-        val m = applyHistoryDict(labToCharMatrix(wState.labyrinth), hist)
-        val goal = wState.goal
-        m(goal.x, goal.y) = goalSymbol
-        m
-      }
-    }
-
-    val labFig = horzConcat(getFig(wState.labyrinth), getFig(wState.visionMap))
+    val labFig = formatLabyrinthState(result.worldState)
 
     val metrics = (for {
       (metric, value) <- result.metrics
-    } yield s"$metric: value").mkString("\n")
+    } yield s"$metric: $value").mkString("\n")
 
     val cMetrics = (for {
-      (metric, value) <- result.continuousMetrics
-    } yield s"$metric: ${value.mkString("[", ",", "]")}").mkString("\n")
+      (metric, values) <- result.continuousMetrics
+      fValues = values.map { v => "%1.2f".format(v) }.mkString("[", ",", "]")
+    } yield s"$metric: $fValues").mkString("\n")
 
     s"Labyrinth:\n$labFig\n\nMetrics:\n$metrics\n\nContinuous metrics:\n$cMetrics"
   }
 
-  def apply(result: RobotResult[LabyrinthState]): Unit = {
-    println(formatInfo(result))
+  private def formatCycle(cycle: CycleResult[LabyrinthState]): String = {
+    val CycleResult(rr, id) = cycle
+    val idInfo  = id.map{ _.toString }.recover { case t => t.toString }.get
+    val rrInfo = rr.map(formatInfo).recover { case t => t.toString }.get
+
+    s"Cycle result [$idInfo]:\n$rrInfo"
+  }
+
+  def formatInfo(result: ExperimentResult[LabyrinthState]): String = {
+    result.results.map(formatCycle).mkString("\n\n")
+  }
+
+  def apply(result: RobotResult[LabyrinthState]): String = {
+    formatInfo(result)
+  }
+
+  def apply(result: ExperimentResult[LabyrinthState]): String = {
+    formatInfo(result)
   }
 }

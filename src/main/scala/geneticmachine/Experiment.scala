@@ -1,13 +1,14 @@
 package geneticmachine
 
+import geneticmachine.ExperimentActor.ExperimentResult
+
 import scala.collection.immutable.Queue
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.Try
 
 object Experiment {
-
-  type Result[S] = List[(Try[S], Try[Long])]
+  case class CycleResult[S : ClassTag](robotResult: Try[RobotResult[S]], brainId: Try[Long])
 
   final case class Using[I, O, F](brainFactory: BrainFactory[I, O, F]) {
     def startWith(id: Long) = new EmptyExperiment(brainFactory, Some(id))
@@ -22,19 +23,19 @@ import Experiment._
 trait ExperimentContext {
   val experimentContext: ExperimentContext = this
 
-  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[Result[S]] = {
+  def executeExperiment[S : ClassTag](experiment: Experiment[_, _, _, S]): Future[ExperimentResult[S]] = {
     // Just because actor messages is always of type Any.
-    executeUntypedExperiment(experiment).mapTo[Result[S]]
+    executeUntypedExperiment(experiment).mapTo[ExperimentResult[S]]
   }
 
-  def executeUntypedExperiment(experiment: Experiment[_, _, _, _]): Future[Any]
+  def executeUntypedExperiment(experiment: Experiment[_, _, _, _]): Future[ExperimentResult[_]]
 
-  def apply[S : ClassTag](ex: => Experiment[_, _, _, S]): Future[Result[S]] = {
+  def apply[S : ClassTag](ex: => Experiment[_, _, _, S]): Future[ExperimentResult[S]] = {
     executeExperiment[S](ex)
   }
 }
 
-sealed abstract class Experiment[I, O, F, +S : ClassTag]
+sealed abstract class Experiment[I, O, F, S : ClassTag]
   (val brainFactory: BrainFactory[I, O, F],
    val startWith: Option[Long],
    val cycles: Queue[RobotFactory[I, O, F, S]]) extends Serializable {
@@ -43,7 +44,7 @@ sealed abstract class Experiment[I, O, F, +S : ClassTag]
     new NonEmptyExperiment(brainFactory, startWith, cycles.enqueue(robotFactory))
   }
 
-  def execute()(implicit context: ExperimentContext): Future[Result[S]] = {
+  def execute()(implicit context: ExperimentContext): Future[ExperimentResult[S]] = {
     context.executeExperiment(this)
   }
 }
@@ -52,7 +53,7 @@ final class EmptyExperiment[I, O, F](brainFactory: BrainFactory[I, O, F],
                                      startWith: Option[Long])
   extends Experiment[I, O, F, Nothing](brainFactory, startWith, Queue.empty)
 
-final class NonEmptyExperiment[I, O, F, +S : ClassTag]
+final class NonEmptyExperiment[I, O, F, S : ClassTag]
   (brainFactory: BrainFactory[I, O, F],
    startWith: Option[Long],
    cycles: Queue[RobotFactory[I, O, F, S]])

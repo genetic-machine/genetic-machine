@@ -1,4 +1,5 @@
 import akka.actor.ActorRef
+import geneticmachine.ExperimentActor.ExperimentResult
 import geneticmachine._
 import labyrinth._
 import brain._
@@ -8,6 +9,8 @@ import machine._
 import generators._
 import metrics._
 import feedback._
+
+import scala.util.{Failure, Success, Try}
 
 object DijkstraBrainMain {
 
@@ -24,8 +27,20 @@ object DijkstraBrainMain {
 
     val experiment = using(brainFactory).startWithNew.testWith(robotFactory).repeat(5)
 
-    val machine = new GeneticMachine with Neo4jDB with RemoteControl with RemoteView
+    val machine = new GeneticMachine with Neo4jDB
 
-    machine(experiment)
+    import machine.dispatcher
+
+    import labyrinth.utils.LabyrinthInfo
+
+    machine(experiment).onComplete {
+      case Success(result) =>
+        machine.log(LabyrinthInfo(result))
+        machine.shutdown()
+
+      case Failure(e: Throwable) =>
+        machine.logError(e)
+        machine.shutdown()
+    }
   }
 }

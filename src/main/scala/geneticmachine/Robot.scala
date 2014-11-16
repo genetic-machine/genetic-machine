@@ -3,7 +3,7 @@ package geneticmachine
 import akka.actor._
 import akka.pattern.{ ask, pipe }
 import common.dataflow.DataFlowFormat
-import scala.util.{Failure, Success}
+import scala.util.{Try, Failure, Success}
 import common.MessageProtocol
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -132,6 +132,7 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
           failureReceive("waiting output", classOf[Brain.Output[OutputT]])
       }
 
+      log.debug(s"World state:\n$state")
       brain ! Brain.Input(input)
 
     case WorldStateDone(state: StateT, None) =>
@@ -157,7 +158,6 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
 
   private final def scoring(state: StateT, output: OutputT): Receive = {
     case FeedbackDone(feedbackData: FeedbackT) =>
-      log.info(s"Feedback: $feedbackData")
 
       context.become {
         waitingAck(state, output)
@@ -172,7 +172,6 @@ abstract class Robot[InputT : ClassTag, StateT : ClassTag, OutputT : ClassTag, F
    */
   private final def waitingOutput(state: StateT): Receive = {
     case Brain.Output(brainOutput: OutputT) =>
-      log.info(s"Brain output: $brainOutput")
 
       context.become {
         scoring(state, brainOutput) orElse

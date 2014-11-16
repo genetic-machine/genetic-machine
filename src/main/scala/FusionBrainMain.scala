@@ -13,8 +13,8 @@ import feedback._
 object FusionBrainMain {
 
   def main(args: Array[String]) {
-    val mutator = LabyrinthPatternMutator(3)
-    val selector = ThresholdSelect[Gene](0.0)
+    val mutator = AdaptiveLabyrinthMutator(3)
+    val selector = QuantileSelector[Gene](0.9) & ThresholdSelector[Gene](0.0)
     val evolution = SafeEvolution[Gene](mutator, selector,
       populationLimit = 1000, crossoverLimit = 750, mutationLimit = 250, generationLimit = 250)
 
@@ -31,12 +31,13 @@ object FusionBrainMain {
 
     val experiment = using(brainFactory).startWithNew.testWith(robotFactory).repeat(5)
 
-    val machine = new GeneticMachine with Neo4jDB with RemoteControl with RemoteView
+    val machine = new GeneticMachine with Neo4jDB
 
     import scala.concurrent.ExecutionContext.Implicits.global
 
     for (results <- machine(experiment)) {
-      println(results)
+      machine.log(LabyrinthInfo(results))
+      machine.shutdown()
     }
   }
 }

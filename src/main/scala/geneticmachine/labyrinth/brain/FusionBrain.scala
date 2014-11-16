@@ -12,11 +12,13 @@ import scala.collection.parallel.immutable.{ParRange, ParVector}
 import scala.concurrent.Future
 import akka.actor._
 
-final case class FusionBrainFactory(evolution: Evolution[ParVector[Gene]]) extends BrainFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback] {
+final case class FusionBrainFactory(senses: List[LabyrinthSense])
+                                   (evolution: Evolution[ParVector[Gene]])
+  extends BrainFactory[LabyrinthInput, LabyrinthOutput, LabyrinthFeedback] {
 
-  def props(dff: DataFlowFormat) = Props { new FusionBrain(evolution, dff) }
+  def props(dff: DataFlowFormat) = Props { new FusionBrain(senses)(evolution)(dff) }
 
-  override def toString: String = s"Fusion Brain ($evolution)"
+  override def toString: String = s"Fusion Brain:\n  -evolution: $evolution;\n  -senses: $senses"
 
   override def empty: DataFlowFormat = {
     val builder = DataFlowFormatBuilder(brainLabel)
@@ -27,7 +29,10 @@ final case class FusionBrainFactory(evolution: Evolution[ParVector[Gene]]) exten
   }
 }
 
-class FusionBrain(val evolution: Evolution[ParVector[Gene]], dff: DataFlowFormat) extends LabyrinthBrain[Population](dff) {
+class FusionBrain(val senses: List[LabyrinthSense])
+                 (val evolution: Evolution[ParVector[Gene]])
+                 (dff: DataFlowFormat)
+  extends LabyrinthBrain[Population](dff) {
 
   import context.dispatcher
 
@@ -70,8 +75,8 @@ class FusionBrain(val evolution: Evolution[ParVector[Gene]], dff: DataFlowFormat
   }
 
   private def action(genes: ParVector[Gene],
-                     observation: vision.Observation,
-                     heuristic: CommandSignal): (Population, LabyrinthOutput) = {
+                     observation: vision.VisionObservation,
+                     senses: Array[Double]): (Population, LabyrinthOutput) = {
     val gs = genes.map { gene =>
       val gain = gene.pattern.compare(observation, heuristic)
       gene.copy(currentGain = gain)
@@ -95,27 +100,19 @@ class FusionBrain(val evolution: Evolution[ParVector[Gene]], dff: DataFlowFormat
   override protected def input(state: Population,
                                input: LabyrinthInput): Future[(Population, LabyrinthOutput)] = Future {
     val observation = input.observation
-    val heuristicResult = DijkstraHeuristicSensor(input)
+    val heuristicResult = DijkstraSense(input)
 
     action(state.entities, observation, heuristicResult)
   }
 
   override protected def feedback(state: Population, feedback: LabyrinthFeedback): Future[Population] = Future {
-    log.info("Active gene")
-    log.info(s"\n${ state.entities(state.activeGene) }")
 
     val activeG = state.entities(state.activeGene)
     val updatedG = activeG.copy(strength = activeG.strength + activeG.currentGain * feedback.value)
     val gs = state.entities.updated(state.activeGene, updatedG)
 
     val updatedPopulation = evolution(gs)
-    val meanR = gs.map { en: Gene =>
-      (en.pattern.matrix.cols - 1) / 2.0
-    }.sum / gs.size
 
-    log.info(s"D strength = ${updatedG.strength - activeG.strength}")
-
-    log.info(s"pattern R $meanR")
     Population(updatedPopulation, state.activeGene)
   }
 }

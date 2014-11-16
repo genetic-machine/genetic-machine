@@ -1,24 +1,24 @@
 package geneticmachine.genetic
 
-import scala.collection.parallel.immutable.ParVector
-
 /**
  * Represents selection.
  */
 trait Selector[P] extends Serializable {
-  final def apply(population: P): P = select(population)
+  def apply(population: P): P
 
-  def select(population: P): P
+  final def &(other: Selector[P]) = {
+    val self = this
+
+    new Selector[P] {
+      final def apply(population: P): P = self(other(population))
+    }
+  }
 }
 
 trait Strength {
-  def strength: Double
+  val strength: Double
 }
 
-final case class ThresholdSelect[G <: Strength](threshold: Double) extends Selector[ParVector[G]] {
-  def select(population: ParVector[G]): ParVector[G] = {
-    population.filter { g: G =>
-      g.strength > threshold
-    }
-  }
+trait AdaptiveSelector[P, I] extends Serializable {
+  def apply(input: I): Selector[P]
 }

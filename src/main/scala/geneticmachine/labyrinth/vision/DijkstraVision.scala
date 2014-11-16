@@ -7,7 +7,7 @@ object DijkstraVision {
 }
 
 class DijkstraVision(val depth: Int) extends Vision {
-  def apply(labyrinth: Labyrinth, from: RobotPosition): Observation = {
+  def apply(labyrinth: Labyrinth, from: RobotPosition): VisionObservation = {
     val vision = Labyrinth.unknown(2 * depth + 1, 2 * depth + 1)
     val offset = Point(depth, depth)
     vision(offset.x, offset.y) = CellStatus.Free
@@ -36,6 +36,6 @@ class DijkstraVision(val depth: Int) extends Vision {
 
     breadthFirstSearch(Set(from.point), Set.empty)
 
-    Observation(vision, from)
+    VisionObservation(vision, from)
   }
 }

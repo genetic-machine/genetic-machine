@@ -9,7 +9,7 @@ object SimpleVision {
 }
 
 class SimpleVision(val depth: Int) extends Vision {
-  def apply(lab: Labyrinth, rp: RobotPosition): Observation = {
+  def apply(lab: Labyrinth, rp: RobotPosition): VisionObservation = {
     val from = rp.point
     val size = 2 * depth + 1
     val visionMap = DenseMatrix.fill(size, size)(CellStatus.Unknown)
@@ -24,7 +24,7 @@ class SimpleVision(val depth: Int) extends Vision {
       visionMap(x, y) = if (Point(labX, labY).inBorders(lab.rows, lab.cols)) lab(labX, labY) else CellStatus.Unknown
     }
 
-    Observation(visionMap, rp)
+    VisionObservation(visionMap, rp)
   }
 
   override def toString: String = s"SimpleVision($depth)"
