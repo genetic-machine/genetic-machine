@@ -1,10 +1,11 @@
 package org.geneticmachine
 
-import breeze.linalg.DenseMatrix
+import org.geneticmachine.navigation.vision._
+
+import breeze.linalg._
 import breeze.storage.Zero
 import scala.math._
 import scala.reflect.ClassTag
-import org.geneticmachine.navigation.vision._
 
 package object navigation {
 
@@ -23,12 +24,7 @@ package object navigation {
   type Labyrinth = DenseMatrix[CellStatus]
 
   def matrixToArray[A : ClassTag](m: DenseMatrix[A]): (Array[A], Int, Int) = {
-    val flatMatrix = for {
-      row <- 0 until m.rows
-      col <- 0 until m.cols
-    } yield m(row, col)
-
-    (flatMatrix.toArray, m.rows, m.cols)
+    (m.data, m.rows, m.cols)
   }
 
   def matrixFromArray[A](array: Array[A], rows: Int, cols: Int): DenseMatrix[A] = {
@@ -36,7 +32,6 @@ package object navigation {
   }
 
   object Labyrinth {
-    def apply(rows: Int, cols: Int) = unknown(rows, cols)
     def unknown(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Unknown)
     def occupied(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Occupied)
     def free(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Free)
@@ -183,25 +178,33 @@ package object navigation {
 
   type Path = List[RobotPosition]
 
-  object NavigationCommand extends Enumeration {
-    type NavigationCommand = Value
-    val TurnLeft, TurnRight, Forward = Value
+  type NavigationCommand = Int
+
+  object NavigationCommand {
+    val TurnLeft: NavigationCommand = 0
+    val Forward: NavigationCommand = 1
+    val TurnRight: NavigationCommand = 2
+
+    val max: Int = 3
   }
 
+  type Direction = Point
+
   object Direction {
+
+    final val Zero = Point(0, 0)
 
     final val North = Point(1, 0)
     final val South = Point(-1, 0)
     final val West = Point(0, 1)
     final val East = Point(0, -1)
-    final val Zero = Point(0, 0)
 
     final val directions = Seq(North, South, West, East)
 
     /**
      * Only for nice serialization.
      */
-    final def id(dir: Direction): Char = dir match {
+    final def char(dir: Direction): Char = dir match {
       case `North` => 'V'
       case `South` => '^'
       case `West` => '>'
@@ -209,15 +212,13 @@ package object navigation {
       case _ => '?'
     }
 
-    final def fromId(dirC: Char): Direction = dirC match {
+    final def fromChar(dirC: Char): Direction = dirC match {
       case 'V' => North
       case '^' => South
       case '>' => West
       case '<' => East
       case _ => Zero
     }
-
-    type Direction = Point
   }
 
   import Direction._
@@ -290,7 +291,7 @@ package object navigation {
     /** Returns true only for [[Zero]] and [[Free]] cells of `lab`. **/
     def inLabyrinth(lab: Labyrinth): Boolean = point.inLabyrinth(lab)
 
-    def *(command: NavigationCommand.NavigationCommand): RobotPosition = {
+    def *(command: NavigationCommand): RobotPosition = {
       command match {
         case NavigationCommand.Forward => forward
         case NavigationCommand.TurnLeft => turnLeft
@@ -298,7 +299,7 @@ package object navigation {
       }
     }
 
-    def /(other: RobotPosition): Option[NavigationCommand.NavigationCommand] = {
+    def /(other: RobotPosition): Option[NavigationCommand] = {
       if (other == this.forward) {
         Some(NavigationCommand.Forward)
       } else if (other == this.turnLeft) {
@@ -310,7 +311,7 @@ package object navigation {
       }
     }
 
-    def apply(command: NavigationCommand.NavigationCommand) = this * command
+    def apply(command: NavigationCommand) = this * command
 
     def %%(lab: Labyrinth): Boolean = this.inLabyrinth(lab)
 
@@ -318,7 +319,7 @@ package object navigation {
       rp.point.inLabyrinth(lab)
     }
 
-    def actionOpt(lab: Labyrinth)(command: NavigationCommand.NavigationCommand): Option[RobotPosition] = {
+    def actionOpt(lab: Labyrinth)(command: NavigationCommand): Option[RobotPosition] = {
       if ((this * command) %% lab) {
         Some(this * command)
       } else {
@@ -326,11 +327,11 @@ package object navigation {
       }
     }
 
-    def action(lab: Labyrinth)(command: NavigationCommand.NavigationCommand): RobotPosition = {
+    def action(lab: Labyrinth)(command: NavigationCommand): RobotPosition = {
       actionOpt(lab)(command).getOrElse(this)
     }
 
-    def actions(lab: Labyrinth): Seq[(NavigationCommand.NavigationCommand, RobotPosition)] = {
+    def actions(lab: Labyrinth): Seq[(NavigationCommand, RobotPosition)] = {
       Seq (
         (NavigationCommand.TurnLeft, turnLeft),
         (NavigationCommand.Forward, forward),
@@ -386,7 +387,7 @@ package object navigation {
 
   /**
    * Cost dict from goal to all possible positions. Since goal isn't [[RobotPosition]] i.e.
-   * doesn't contain [[Direction.Direction]], this method takes minimum for each cell
+   * doesn't contain [[Direction]], this method takes minimum for each cell
    * for all possible directions in goal position.
    */
   def reverseCostDict(lab: Labyrinth, goal: Point): CostDict = {
@@ -451,7 +452,7 @@ package object navigation {
     charMatrixToString(cm)
   }
 
-  type CommandSignal = Map[NavigationCommand.NavigationCommand, Double]
+  type CommandSignal = Map[NavigationCommand, Double]
 
   object CommandSignal {
     def empty = Map (
@@ -474,7 +475,7 @@ package object navigation {
     def apply(cs: CommandSignal) = empty ++ cs
   }
 
-  def directionToCommand(robotDirection: Direction)(direction: Direction): Seq[NavigationCommand.NavigationCommand] = {
+  def directionToCommand(robotDirection: Direction)(direction: Direction): Seq[NavigationCommand] = {
     val robotDirectionLeft = robotDirection.turnLeft
     val robotDirectionRight = robotDirection.turnRight
     direction match {
@@ -491,7 +492,7 @@ package object navigation {
 
   case class NavigationState(visionMap: Labyrinth, labyrinth: Labyrinth,
                             robotPosition: RobotPosition,
-                            goal: Point, path: Path, history: List[NavigationCommand.NavigationCommand]) {
+                            goal: Point, path: Path, history: List[NavigationCommand]) {
 
     def toCharMap: DenseMatrix[Char] = {
       val result = labToCharMatrix(visionMap)
@@ -500,7 +501,7 @@ package object navigation {
         result(p.point.x, p.point.y) = if (result(p.point.x, p.point.y) == '+') { '*' } else { '+' }
       }
 
-      result(robotPosition.point.x, robotPosition.point.y) = Direction.id(robotPosition.direction)
+      result(robotPosition.point.x, robotPosition.point.y) = Direction.char(robotPosition.direction)
 
       result
     }
@@ -516,13 +517,13 @@ package object navigation {
         vis(p.point.x, p.point.y) = '.'
       }
 
-      vis(robotPosition.point.x, robotPosition.point.y) = Direction.id(robotPosition.direction)
+      vis(robotPosition.point.x, robotPosition.point.y) = Direction.char(robotPosition.direction)
 
       charMatrixToString(vis)
     }
   }
 
-  type NavigationOutput = NavigationCommand.NavigationCommand
+  type NavigationOutput = NavigationCommand
 
   abstract class LabyrinthAlgorithm[+C <: ExecutionContext] extends Algorithm[NavigationInput, NavigationOutput, C]
 

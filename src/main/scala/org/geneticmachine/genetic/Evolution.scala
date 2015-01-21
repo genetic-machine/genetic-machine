@@ -26,7 +26,3 @@ trait Evolution[P] extends Serializable { self =>
     }
   }
 }
-
-trait AdaptiveEvolution[P, I] extends Serializable {
-  def apply(input: I): Evolution[P]
-}

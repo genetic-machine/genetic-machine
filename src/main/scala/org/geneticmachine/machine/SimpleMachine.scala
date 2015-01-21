@@ -9,6 +9,9 @@ final class SimpleMachine[+C <: ExecutionContext]
   extends Machine[C] {
 
   def submit[I, O, S, C1 >: C](experiment: Experiment[I, O, S, C1]): Future[ExperimentResult[S]] = {
+
+    import executionContext.futureExecutionContext
+
     def foldExperiment(ex: Experiment[I, O, S, C1], acc: List[PairResult[S]]): Future[ExperimentResult[S]] = {
       val nextOpt = ex.next(ExperimentResult(acc))
 

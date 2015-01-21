@@ -1,14 +1,7 @@
 package org.geneticmachine.navigation.utils
 
-import java.io.{PrintWriter, File}
-
-import breeze.io.TextWriter.FileWriter
-import common.info.Info
-import org.geneticmachine.Experiment.CycleResult
-import org.geneticmachine.machine.{RobotResult, ExperimentActor}
-import ExperimentActor.ExperimentResult
-import org.geneticmachine.navigation.{ RobotPosition, Point, Direction }
-import org.geneticmachine.navigation.{Labyrinth, CellStatus, NavigationState}
+import org.geneticmachine.{FinalState, ExperimentResult, PairResult}
+import org.geneticmachine.navigation._
 
 object LabyrinthSVG {
 
@@ -20,7 +13,7 @@ object LabyrinthSVG {
     case CellStatus.Unknown => "grey"
   }
 
-  abstract sealed class SVGObj extends Info {
+  abstract sealed class SVGObj {
     def x: Int
     def y: Int
     def w: Int
@@ -128,11 +121,11 @@ object LabyrinthSVG {
     SVG.horizConcat(List(vision, actualMap), 20)
   }
 
-  def apply(result: RobotResult[NavigationState]): SVG = apply(result.worldState)
+  def apply(result: PairResult[NavigationState]): SVG = apply(result.finalState.get)
 
-  def apply(result: CycleResult[NavigationState]): SVG = apply(result.robotResult.get)
+  def apply(result: FinalState[NavigationState]): SVG = apply(result.finalState)
 
   def apply(result: ExperimentResult[NavigationState]): SVG = {
-    SVG.vertConcat(result.results.map(LabyrinthSVG.apply), 25)
+    SVG.vertConcat(result.steps.map(LabyrinthSVG.apply), 25)
   }
 }

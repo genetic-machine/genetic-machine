@@ -3,7 +3,7 @@ package test.machine
 import akka.actor.ActorRef
 import common.ViewProtocol
 import org.geneticmachine.navigation.LabyrinthRobot
-import org.geneticmachine.navigation.algorithm.DijkstraBrain
+import org.geneticmachine.navigation.algorithm.NaiveNavigation$
 import org.scalatest.{FlatSpec, BeforeAndAfterAll, Matchers}
 import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._
@@ -15,7 +15,7 @@ import test._
 
 class MachineTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
-  val experimentSample = using(DijkstraBrain).startWithNew.testWith(LabyrinthRobot.sampleFactory).repeat(3)
+  val experimentSample = using(NaiveNavigation).startWithNew.testWith(LabyrinthRobot.sampleFactory).repeat(3)
 
   def executeShutdownAndCheck(machine: Machine, ex: Experiment[_, _, _, _]) {
     val results = Await.result(machine(ex), 10.seconds * ex.cycles.size)

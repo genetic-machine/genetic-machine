@@ -3,18 +3,20 @@ package org.geneticmachine.navigation.feedback
 import org.geneticmachine.navigation._
 
 object LaplacePotentialFeedback {
-  def apply(scalePos: Double, scaleNeg: Double) = FeedbackStrategyGenerator { initialState: NavigationState =>
-    val costDict = reverseCostDict(initialState.labyrinth, initialState.goal)
-    new LaplacePotentialFeedback(costDict, scalePos, scaleNeg)
+  def apply(scalePos: Double, scaleNeg: Double): FeedbackStrategyGenerator = {
+    FeedbackStrategyGenerator { initialState: NavigationState =>
+      val costDict = reverseCostDict(initialState.labyrinth, initialState.goal)
+      new LaplacePotentialFeedback(costDict, scalePos, scaleNeg)
+    }
   }
 
-  def apply(scalePos: Double) = apply(scalePos, scalePos)
+  def apply(scalePos: Double): FeedbackStrategyGenerator = apply(scalePos, scalePos)
 }
 
 class LaplacePotentialFeedback(val costDict: CostDict, val scalePos: Double, val scaleNeg: Double) extends FeedbackStrategy {
   override def toString: String = "Laplace's potential feedback"
 
-  def apply(status: NavigationState, action: NavigationCommand.NavigationCommand): Double = {
+  def apply(status: NavigationState, action: NavigationCommand): Double = {
     val currentCost = costDict(status.robotPosition)
     val updatedCost = costDict(status.robotPosition.action(status.labyrinth)(action))
 
@@ -28,7 +30,7 @@ class LaplacePotentialFeedback(val costDict: CostDict, val scalePos: Double, val
 case class HistoryFeedback(feedback: Double, repetition: Int = 5) extends FeedbackStrategy {
   override def toString: String = "History feedback"
 
-  def apply(state: NavigationState, action: NavigationCommand.NavigationCommand): Double = {
+  def apply(state: NavigationState, action: NavigationCommand): Double = {
     val nextPosition = state.robotPosition.action(state.labyrinth)(action)
     val sameHist = state.path.filter { p =>
       p == nextPosition

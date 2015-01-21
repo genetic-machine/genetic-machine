@@ -71,6 +71,6 @@ trait Mutator[T] extends Serializable { self =>
  * @tparam T type of genes
  * @tparam I type of input
  */
-trait AdaptiveMutator[T, -I] {
-  def apply(input: I): Mutator[T]
-}
+ //{
+//  def apply(input: I): Mutator[T]
+//}

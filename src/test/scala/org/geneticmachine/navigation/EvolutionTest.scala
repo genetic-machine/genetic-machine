@@ -5,7 +5,7 @@ import akka.testkit.TestKit
 import common.MessageProtocol
 import org.geneticmachine.Experiment._
 import org.geneticmachine.db.Neo4JActor
-import org.geneticmachine.navigation.algorithm.DijkstraBrain
+import org.geneticmachine.navigation.algorithm.NaiveNavigation$
 import org.geneticmachine.navigation.{LabyrinthRobot, NavigationState}
 import org.geneticmachine.machine.ExperimentActor
 import org.scalatest._
@@ -35,7 +35,7 @@ class EvolutionTest(_system: ActorSystem) extends TestKit(_system)
       val dbActor = _system.actorOf(Props(new Neo4JActor("./genetic-machine-db")))
 
       val rf = LabyrinthRobot.sampleFactory
-      val experiment = using(DijkstraBrain).startWithNew.testWith(rf).repeat(3)
+      val experiment = using(NaiveNavigation).startWithNew.testWith(rf).repeat(3)
 
       val eActor = _system.actorOf(Props(new ExperimentActor(experiment, dbActor)), "Experiment")
       Await.result(eActor.ask(MessageProtocol.Init)(60.seconds), 62.seconds) match {

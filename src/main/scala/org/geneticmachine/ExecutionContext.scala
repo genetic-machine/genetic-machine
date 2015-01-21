@@ -11,5 +11,5 @@ trait ExecutionContext {
 
   def logger: org.slf4j.Logger
 
-  def submit[I, O, S, C1 >: C](stepPair: StepPair[I, O, S, C1])(implicit db: DBDriver): Future[PairResult[S]]
+  def submit[I, O, S, C1 >: this.type](stepPair: StepPair[I, O, S, C1])(implicit db: DBDriver): Future[PairResult[S]]
 }

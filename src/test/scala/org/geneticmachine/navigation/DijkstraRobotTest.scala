@@ -5,7 +5,7 @@ import akka.testkit.TestKit
 import akka.pattern.ask
 
 import common.MessageProtocol
-import org.geneticmachine.navigation.algorithm.DijkstraBrain
+import org.geneticmachine.navigation.algorithm.NaiveNavigation$
 import org.geneticmachine.navigation.feedback.ZeroFeedback
 import org.geneticmachine.machine.RobotResult
 import org.scalatest.WordSpecLike
@@ -32,7 +32,7 @@ class DijkstraRobotTest (_system: ActorSystem) extends TestKit(_system)
   }
 
   class RobotBrainActor(val labGen: LabyrinthGenerator, val vision: Vision) extends Actor {
-    val brain = context.actorOf(Props(new DijkstraBrain(DijkstraBrain.empty)))
+    val brain = context.actorOf(Props(new NaiveNavigation(NaiveNavigation.empty)))
     val robot = context.actorOf(Props(new LabyrinthRobot(brain, labGen, vision, ZeroFeedback, Nil, Nil)))
 
     override def receive: Receive = wait(robot)

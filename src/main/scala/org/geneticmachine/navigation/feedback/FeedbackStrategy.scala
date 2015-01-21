@@ -1,6 +1,5 @@
 package org.geneticmachine.navigation.feedback
 
-import org.geneticmachine.navigation.NavigationCommand._
 import org.geneticmachine.navigation.{ NavigationCommand, NavigationState }
 
 object FeedbackStrategyGenerator {
@@ -17,7 +16,7 @@ trait FeedbackStrategyGenerator extends Serializable {
 
   def apply(initialState: NavigationState): FeedbackStrategy
 
-  def *(scale: Double) = FeedbackStrategyGenerator { initialState =>
+  def *(scale: Double): FeedbackStrategyGenerator = FeedbackStrategyGenerator { initialState =>
     apply(initialState) * scale
   }
 
@@ -33,7 +32,7 @@ trait FeedbackStrategyGenerator extends Serializable {
 }
 
 object FeedbackStrategy {
-  def apply(feedback: (NavigationState, NavigationCommand.NavigationCommand) => Double): FeedbackStrategy = {
+  def apply(feedback: (NavigationState, NavigationCommand) => Double): FeedbackStrategy = {
     new FeedbackStrategy {
       override def apply(state: NavigationState, action: NavigationCommand): Double = feedback(state, action)
     }
@@ -43,7 +42,7 @@ object FeedbackStrategy {
 trait FeedbackStrategy extends FeedbackStrategyGenerator with Serializable { self =>
   override def toString: String = "Incomplete FeedbackStrategy"
 
-  def apply(state: NavigationState, action: NavigationCommand.NavigationCommand): Double
+  def apply(state: NavigationState, action: NavigationCommand): Double
 
   final def apply(initialState: NavigationState): FeedbackStrategy = self
 

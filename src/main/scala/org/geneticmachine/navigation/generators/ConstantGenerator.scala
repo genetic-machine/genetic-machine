@@ -29,13 +29,13 @@ case class ConstantGenerator(filename: String) extends LabyrinthGenerator {
     }
 
     val goalY = lab(goalX).indexOf('*')
-    val dirs = Direction.directions.map { Direction.id }.toSet
+    val dirs = Direction.directions.map { Direction.char }.toSet
 
     val (sx, sy, dir) = (for {
       i <- 0 until rows
       j <- 0 until cols
       if dirs.contains(lab(i)(j))
-    } yield (i, j, Direction.fromId(lab(i)(j)))).head
+    } yield (i, j, Direction.fromChar(lab(i)(j)))).head
 
     (matrix, RobotPosition(Point(sx, sy), dir), Point(goalX, goalY))
   }

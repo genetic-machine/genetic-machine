@@ -4,7 +4,7 @@ import akka.actor.{ActorRef, Props, ActorSystem}
 import akka.testkit.{ImplicitSender, TestKit}
 import common.MessageProtocol
 import org.geneticmachine.db.Neo4JActor
-import org.geneticmachine.navigation.algorithm.DijkstraBrain
+import org.geneticmachine.navigation.algorithm.NaiveNavigation$
 import org.geneticmachine.machine.Guide
 import org.scalatest._
 import org.geneticmachine.navigation._
@@ -33,7 +33,7 @@ class GuideTest(system: ActorSystem) extends TestKit(system) with FlatSpecLike w
   behavior of "Guard actor"
 
   it must "guide brain-robot" in {
-    val brain = system.actorOf(Props(new DijkstraBrain(DijkstraBrain.empty)), "TheBrain")
+    val brain = system.actorOf(Props(new NaiveNavigation(NaiveNavigation.empty)), "TheBrain")
     val robotFactory = LabyrinthRobot.sampleFactory
     val guide = system.actorOf(Props(new Guide(brain, robotFactory, 10.seconds)), "TheGuide")
     val result = Await.result(guide.ask(MessageProtocol.Init)(11.seconds), 11.seconds)

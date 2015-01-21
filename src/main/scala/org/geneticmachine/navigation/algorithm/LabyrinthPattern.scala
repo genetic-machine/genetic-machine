@@ -4,7 +4,7 @@ import org.geneticmachine.navigation._
 import org.geneticmachine.navigation.vision._
 import org.geneticmachine.genetic._
 
-import common.dataflow.DataFlowFormat._
+import org.geneticmachine.common.graph.Graph._
 
 import breeze.linalg.DenseMatrix
 import breeze.stats.distributions._
@@ -21,8 +21,6 @@ object LabyrinthPattern {
       matrix = matrixFromArray(flatMatrix, rows, cols)
     } yield LabyrinthPattern(matrix, coefs)
   }
-  
-  type Command = NavigationCommand.NavigationCommand
 
   /**
    * Vector multiplication: c' * v.
@@ -69,7 +67,7 @@ final case class LabyrinthPattern(matrix: DenseMatrix[Double], abstractCoefs: Ar
 
 object Gene {
 
-  def apply(pattern: LabyrinthPattern, action: Command)
+  def apply(pattern: LabyrinthPattern, action: NavigationCommand)
            (strength: Double, currentGain: Double): Gene = {
     new Gene(pattern, action)(strength, currentGain)
   }
@@ -78,19 +76,19 @@ object Gene {
     for {
       strength <- props.getAs[Double]("strength")
       currentGain <- props.getAs[Double]("gain")
-      action <- props.getAs[Int]("action")
+      action <- props.getAs[NavigationCommand]("action")
       pattern <- LabyrinthPattern.fromProps(props)
-    } yield Gene(pattern, NavigationCommand(action))(strength, currentGain)
+    } yield Gene(pattern, action)(strength, currentGain)
   }
 }
 
-final class Gene(val pattern: LabyrinthPattern, val action: Command)
-                (val strength: Double, val currentGain: Double) extends Strength {
+final class Gene(val pattern: LabyrinthPattern, val action: NavigationCommand)
+                (val strength: Double, val currentGain: Double) extends GeneStrength {
   def asProps: Map[String, Any] = {
     Map[String, Any](
       "strength" -> strength,
       "gain" -> currentGain,
-      "action" -> action.id
+      "action" -> action
     ) ++ pattern.asProps
   }
 
@@ -107,7 +105,7 @@ final class Gene(val pattern: LabyrinthPattern, val action: Command)
   }
 
   def withFeedback(command: NavigationOutput)(feedback: Double): Gene = withStrength {
-    val influence = if (action.id == command.id) {
+    val influence = if (action == command) {
       (if (currentGain > 0.0) 1.0 else 0.0) * feedback
     } else {
       0.0
@@ -121,12 +119,8 @@ object LabyrinthMutator {
 
   def adaptive(patternR: Int, additionalCoefsLen: Int,
                learningSpeed: Double, similarityCoef: Double,
-               defaultStrength: Double): Adaptation[Gene, PostObservation] = {
-    new Adaptation[Gene, PostObservation] {
-      def apply(input: PostObservation): Mutator[Gene] = {
-        LabyrinthMutator(patternR, additionalCoefsLen, learningSpeed, similarityCoef, defaultStrength)(input)
-      }
-    }
+               defaultStrength: Double): AdaptiveMutator[Gene, PostObservation] = {
+        LabyrinthMutator(patternR, additionalCoefsLen, learningSpeed, similarityCoef, defaultStrength)
   }
 
   val patternDistGeneration = new Gaussian(0.0, 1.0)
@@ -138,16 +132,15 @@ object LabyrinthMutator {
   val crossoverDist = patternDistDelta
 
   val actionDist = for {
-    i <- Rand.randInt(NavigationCommand.maxId)
-  } yield NavigationCommand(i)
+    i <- Rand.randInt(NavigationCommand.max)
+  } yield i
 
-  val exceptDist = Rand.randInt(NavigationCommand.maxId - 1)
+  val exceptDist = Rand.randInt(NavigationCommand.max)
 
-  def actionDistExcept(action: NavigationCommand.NavigationCommand): NavigationCommand.NavigationCommand = {
-    val a = exceptDist.draw()
-    NavigationCommand {
-      if (a == action.id) { NavigationCommand.maxId - 1 } else { a }
-    }
+  def actionDistExcept(action: NavigationCommand): NavigationCommand = {
+    val a: Int = exceptDist.draw()
+
+    if (a == action) { NavigationCommand.max - 1 } else { a }
   }
 
   private val uniform = new Uniform(0.0, 1.0)
@@ -174,11 +167,11 @@ object LabyrinthMutator {
   }
 }
 
-final case class PostObservation(obs: InnerObservation, command: NavigationCommand.NavigationCommand, feedback: Double)
+final case class PostObservation(obs: InnerObservation, command: NavigationCommand, feedback: Double)
 
 final case class LabyrinthMutator(patternR: Int, additionalCoefsLen: Int,
                                   learningSpeed: Double, similarityCoef: Double, defaultStrength: Double)
-                                  (postObs: PostObservation)
+                                 (postObs: PostObservation)
   extends Mutator[Gene] {
 
   import LabyrinthMutator._
@@ -263,7 +256,7 @@ final case class LabyrinthMutator(patternR: Int, additionalCoefsLen: Int,
   }
 
   @inline
-  private def crossoverAction(g1: Gene, g2: Gene): Command = {
+  private def crossoverAction(g1: Gene, g2: Gene): NavigationCommand = {
     val p = g1.strength / (g2.strength + g2.strength)
     withProb(p)(g1.action, g2.action)
   }

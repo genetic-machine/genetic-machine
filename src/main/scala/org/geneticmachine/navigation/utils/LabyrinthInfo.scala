@@ -1,16 +1,11 @@
 package org.geneticmachine.navigation.utils
 
 import breeze.linalg.DenseMatrix
-import org.geneticmachine.Experiment.CycleResult
-import org.geneticmachine.machine.{RobotResult, ExperimentActor}
-import ExperimentActor.ExperimentResult
+import org.geneticmachine.{ExperimentResult, FinalState, PairResult}
 import org.geneticmachine.navigation._
-
-import scala.util.{Failure, Success}
+import org.geneticmachine.Experiment._
 
 object LabyrinthInfo {
-  import Direction._
-
   private def foldHistory(hist: Seq[RobotPosition]): Map[Point, Map[Direction, Int]] = {
     def foldPoint(acc: Map[Point, Map[Direction, Int]], rp: RobotPosition): Map[Point, Map[Direction, Int]] = {
       val pointHist = if (acc.contains(rp.point)) {
@@ -40,7 +35,7 @@ object LabyrinthInfo {
 
       pHist.keys.toList match {
         case d :: Nil if visited == 1 =>
-          Direction.id(d)
+          Direction.char(d)
 
         case d1 :: d2 :: Nil if (d1 == d2.reverse) && visited == 2 =>
           returnSymbol
@@ -104,7 +99,7 @@ object LabyrinthInfo {
         val goal = state.goal
         m(goal.x, goal.y) = goalSymbol
         val rp = state.robotPosition.point
-        m(rp.x, rp.y) = Direction.id(state.robotPosition.direction)
+        m(rp.x, rp.y) = Direction.char(state.robotPosition.direction)
         m
       }
     }
@@ -126,8 +121,8 @@ object LabyrinthInfo {
    * }}}
    *
    */
-  def formatInfo(result: RobotResult[NavigationState]): String = {
-    val labFig = formatLabyrinthState(result.worldState)
+  def formatInfo(result: FinalState[NavigationState]): String = {
+    val labFig = formatLabyrinthState(result.finalState)
 
     val metrics = (for {
       (metric, value) <- result.metrics
@@ -141,8 +136,8 @@ object LabyrinthInfo {
     s"Labyrinth:\n$labFig\n\nMetrics:\n$metrics\n\nContinuous metrics:\n$cMetrics"
   }
 
-  private def formatCycle(cycle: CycleResult[NavigationState]): String = {
-    val CycleResult(rr, id) = cycle
+  private def formatInfo(result: PairResult[NavigationState]): String = {
+    val PairResult(rr, id) = result
     val idInfo  = id.map{ _.toString }.recover { case t => t.toString }.get
     val rrInfo = rr.map(formatInfo).recover { case t => t.toString }.get
 
@@ -150,10 +145,10 @@ object LabyrinthInfo {
   }
 
   def formatInfo(result: ExperimentResult[NavigationState]): String = {
-    result.results.map(formatCycle).mkString("\n\n")
+    result.steps.map(formatInfo).mkString("\n\n")
   }
 
-  def apply(result: RobotResult[NavigationState]): String = {
+  def apply(result: PairResult[NavigationState]): String = {
     formatInfo(result)
   }
 

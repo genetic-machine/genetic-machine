@@ -3,7 +3,6 @@ package org.geneticmachine.navigation.algorithm
 import scala.concurrent.Future
 import breeze.stats.distributions._
 
-import org.geneticmachine.navigation.NavigationCommand.NavigationCommand
 import org.geneticmachine.navigation._
 
 import org.geneticmachine.{Algorithm, ExecutionContext, AlgorithmGen}
@@ -13,6 +12,8 @@ object BrownianWalker extends AlgorithmGen[NavigationInput, NavigationOutput, Ex
   override def toString: String = "Brownian Walker"
 
   override def apply[C <: ExecutionContext](c: C): BrownianWalker = new BrownianWalker(c)
+
+  def empty: Graph = Graph.empty(Graph.algorithmLabel, "NavigationInput", "NavigationOutput")
 }
 
 case class BrownianWalker(private val context: ExecutionContext)
@@ -22,7 +23,7 @@ case class BrownianWalker(private val context: ExecutionContext)
 
   val commandDist = for {
     cId <- Rand.randInt(3)
-  } yield NavigationCommand(cId)
+  } yield cId
 
   override def serialize(state: Int) = Future.successful {
     BrownianWalker.empty
