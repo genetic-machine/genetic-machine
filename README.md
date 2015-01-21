@@ -10,9 +10,9 @@ Please, visit [wiki](https://github.com/ZloVechno/genetic-machine/wiki) to learn
 
 ## In a few words
 ```scala
-import geneticmachine._
-import geneticmachine.labyrinth.{LabyrinthRobot, DijkstraBrain, LabyrinthStatus}
-import geneticmachine.machine.GeneticMachine
+import org.geneticmachine._
+import org.geneticmachine.navigation.{LabyrinthRobot, DijkstraBrain, LabyrinthStatus}
+import org.geneticmachine.machine.GeneticMachine
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Success
 

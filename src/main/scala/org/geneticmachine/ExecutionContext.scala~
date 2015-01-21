@@ -1,0 +1,11 @@
+package org.geneticmachine
+
+import scala.concurrent.{ExecutionContext => FutureExecutionContext, Future}
+
+trait ExecutionContext[+C] {
+  implicit val futureExecutionContext: FutureExecutionContext
+
+  def submit[I, O, S, C1 >: C](stepPair: StepPair[I, O, S, C1]): Future[PairResult[S]]
+
+  def inc(x: List[Int]]): List[Int] = { x. }
+}
