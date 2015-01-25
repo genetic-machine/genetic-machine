@@ -8,9 +8,9 @@ import org.geneticmachine.navigation.heuristics.DijkstraSense
 import scala.concurrent.Future
 
 object NaiveNavigation extends AlgorithmGen[NavigationInput, NavigationOutput, ExecutionContext] {
-  override def toString: String = "Naive Dijkstra Algorithm"
+  override def toString: String = "Naive Dijkstra's Algorithm"
 
-  override def apply[C <: ExecutionContext](c: C): Algorithm[NavigationInput, NavigationCommand, ExecutionContext] = {
+  override def apply(c: ExecutionContext): Algorithm[NavigationInput, NavigationCommand] = {
     new NaiveNavigation(c)
   }
 
@@ -18,7 +18,7 @@ object NaiveNavigation extends AlgorithmGen[NavigationInput, NavigationOutput, E
 }
 
 class NaiveNavigation(val context: ExecutionContext)
-  extends Algorithm[NavigationInput, NavigationCommand, ExecutionContext] {
+  extends Algorithm[NavigationInput, NavigationCommand] {
 
   type StateT = Int
 
@@ -31,7 +31,7 @@ class NaiveNavigation(val context: ExecutionContext)
   import context.futureExecutionContext
 
   override def act(stepCounter: Int, data: NavigationInput): Future[(Int, NavigationCommand)] = Future {
-    val command = DijkstraSense.optimal(data)
+    val command = DijkstraSense.optimal2(data)
     val newState = stepCounter + 1
     (newState, command)
   }

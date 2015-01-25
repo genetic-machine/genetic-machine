@@ -46,7 +46,7 @@ object DijkstraSense extends LabyrinthSense {
   }
 
   def commandSignal(labInput: NavigationInput): CommandSignal = {
-    val NavigationInput(lab, from, goal) = labInput
+    val NavigationInput(lab, from, goal, _) = labInput
     val cost = reverseCostDict(lab, goal)
 
     dijkstraHeuristicSensor(lab, from, cost)
@@ -66,5 +66,9 @@ object DijkstraSense extends LabyrinthSense {
       (c, v) <- commandSignal(labInput)
       if v > 0.0
     } yield c).head
+  }
+
+  def optimal2(labInput: NavigationInput): NavigationOutput = {
+    optimalAction(labInput.lab, labInput.robotPosition, labInput.goal)
   }
 }

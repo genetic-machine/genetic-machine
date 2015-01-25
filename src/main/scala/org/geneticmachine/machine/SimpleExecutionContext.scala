@@ -8,17 +8,19 @@ import scala.util.{Failure, Success, Try}
 
 class SimpleExecutionContext extends ExecutionContext {
 
-  type C = SimpleExecutionContext
-
   override implicit val futureExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
 
   override val logger: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(getClass.getSimpleName)
 
-  def submit[I, O, S, C1 >: C](pair: StepPair[I, O, S, C1])
-                              (implicit db: DBDriver): Future[PairResult[S]] = {
+  def submit[I, O, S, C >: this.type <: ExecutionContext ](pair: StepPair[I, O, S, C])
+                                                          (implicit db: DBDriver): Future[PairResult[S]] = {
     /** Bind context **/
     val algorithm = pair.algorithm(this)
     val environment = pair.environment(this)
+
+    logger.info {
+      s"Executing pair: $pair."
+    }
 
     val parentalGraph: Option[Graph] = for {
       pId <- pair.parentId
@@ -26,6 +28,9 @@ class SimpleExecutionContext extends ExecutionContext {
 
     type AlgoState = algorithm.StateT
 
+    logger.info {
+      s"Initialization of the algorithm and the environment..."
+    }
     val initialAlgoState = algorithm.init(parentalGraph)
     val initialEnvState = environment.init
 
@@ -46,14 +51,30 @@ class SimpleExecutionContext extends ExecutionContext {
         (aGraph, ams, acms) <- algorithm.finish(algoState)
         (eGraph, ems, ecms) <- environment.finish(envState)
       } yield {
+        logger.info("Finalization...")
+
         val aGraphWithParent = aGraph.parentInjection {
           if (pair.parentId.isDefined) pair.parentId.get else Graph.nullParent
         }
 
         val algoId = Try { db.save(aGraphWithParent) }
 
+        algoId match {
+          case Failure(t: Throwable) =>
+            logger.warn("Algorithm final state was failed to serialize:", t)
+
+          case _ => ()
+        }
+
         for (aId <- algoId) {
-          val _ = db.save(eGraph.uniqueRelationInjection(Graph.experimentRelation, aId))
+          Try {
+            db.save(eGraph.uniqueRelationInjection(Graph.experimentRelation, aId))
+          } match {
+            case Failure(t: Throwable) =>
+              logger.warn("Environment final state was failed to serialize:", t)
+
+            case _ => ()
+          }
         }
 
         val fState = FinalState(envState, ams ++ ems, acms ++ ecms)

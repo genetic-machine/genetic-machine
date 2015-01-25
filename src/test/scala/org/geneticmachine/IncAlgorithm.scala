@@ -1,18 +1,17 @@
 package org.geneticmachine
 
 import org.geneticmachine.common.graph.Graph
-import org.geneticmachine.ExecutionContext
 
 import scala.concurrent.Future
 
 object IncAlgorithmGen extends AlgorithmGen[Int, Int, ExecutionContext] {
-  def apply[C <: ExecutionContext](context: C): Algorithm[Int, Int, ExecutionContext] = {
+  def apply(context: ExecutionContext): Algorithm[Int, Int] = {
     new IncAlgorithm(context)
   }
 }
 
 final class IncAlgorithm(val context: ExecutionContext)
-  extends Algorithm[Int, Int, ExecutionContext] {
+  extends Algorithm[Int, Int] {
 
   import Graph._
 
@@ -32,7 +31,8 @@ final class IncAlgorithm(val context: ExecutionContext)
   }
 
   override def serialize(state: List[Int]): Future[Graph] = Future.successful {
-    val props = Map("history", state.toArray)
+    val props = Map("history" -> state.toArray)
+
     Graph.single(Graph.algorithmLabel)("DummyAlgorithm", props)
   }
 }

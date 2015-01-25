@@ -115,12 +115,12 @@ final class Gene(val pattern: LabyrinthPattern, val action: NavigationCommand)
   }
 }
 
-object LabyrinthMutator {
+object FusionMutator {
 
   def adaptive(patternR: Int, additionalCoefsLen: Int,
                learningSpeed: Double, similarityCoef: Double,
                defaultStrength: Double): AdaptiveMutator[Gene, PostObservation] = {
-        LabyrinthMutator(patternR, additionalCoefsLen, learningSpeed, similarityCoef, defaultStrength)
+        FusionMutator(patternR, additionalCoefsLen, learningSpeed, similarityCoef, defaultStrength)
   }
 
   val patternDistGeneration = new Gaussian(0.0, 1.0)
@@ -169,12 +169,12 @@ object LabyrinthMutator {
 
 final case class PostObservation(obs: InnerObservation, command: NavigationCommand, feedback: Double)
 
-final case class LabyrinthMutator(patternR: Int, additionalCoefsLen: Int,
-                                  learningSpeed: Double, similarityCoef: Double, defaultStrength: Double)
-                                 (postObs: PostObservation)
+final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
+                               learningSpeed: Double, similarityCoef: Double, defaultStrength: Double)
+                              (postObs: PostObservation)
   extends Mutator[Gene] {
 
-  import LabyrinthMutator._
+  import FusionMutator._
 
   override def generation(): Gene = {
     val currentVision = Labyrinth.copy(postObs.obs.vision, postObs.obs.from.point, patternR)(0: Int).map { _.toDouble }
@@ -239,14 +239,14 @@ final case class LabyrinthMutator(patternR: Int, additionalCoefsLen: Int,
 
   @inline
   private def crossoverMean(d1: Double, d2: Double): Double = {
-    val noise = LabyrinthMutator.crossoverDist.draw()
+    val noise = FusionMutator.crossoverDist.draw()
     (noise * (d1 - d2) + d1 + d2) / 2.0
   }
 
   @inline
   private def crossoverMean(d1: Double, d2: Double, s1: Double, s2: Double): Double = {
-    val r1 = (LabyrinthMutator.crossoverDist.draw() + d1) * s1
-    val r2 = (LabyrinthMutator.crossoverDist.draw() + d2) * s2
+    val r1 = (FusionMutator.crossoverDist.draw() + d1) * s1
+    val r2 = (FusionMutator.crossoverDist.draw() + d2) * s2
     (r1 + r2) / (s1 + s2)
   }
 

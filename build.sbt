@@ -6,6 +6,8 @@ scalaVersion := "2.11.2"
 
 scalacOptions += "-feature"
 
+scalacOptions += "-deprecation"
+
 resolvers += "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases/"
 
 resolvers += "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/"

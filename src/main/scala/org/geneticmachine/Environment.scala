@@ -5,17 +5,15 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 abstract class EnvironmentGen[+InputT, -OutputT, StateT, -Context <: ExecutionContext] {
-  def apply[C <: Context](c: C): Environment[InputT, OutputT, StateT, C]
+  def apply(c: Context): Environment[InputT, OutputT, StateT]
 }
 
-abstract class Environment[+InputT, -OutputT, StateT, +Context <: ExecutionContext]
+abstract class Environment[+InputT, -OutputT, StateT]
   extends Serializable {
 
   val metrics: Seq[Metric[StateT]] = Seq.empty
 
   val continuousMetrics: Seq[ContinuousMetric[StateT]] = Seq.empty
-
-  val context: Context
 
   /**
    * @return initial status and initial algorithm's input.

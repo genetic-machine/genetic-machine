@@ -1,8 +1,8 @@
-package test.db.drivers
+package org.geneticmachine.machine.db.drivers
 
-import org.geneticmachine.db.drivers.Neo4JDriver
+import org.geneticmachine._
+import org.geneticmachine.machine.db.Neo4JDriver
 import org.scalatest._
-import test._
 
 import scala.collection.JavaConversions._
 import scala.util._

@@ -5,14 +5,12 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 abstract class AlgorithmGen[-InputT, +OutputT, -Context <: ExecutionContext] {
-  def apply[C <: Context](c: C): Algorithm[InputT, OutputT, C]
+  def apply(c: Context): Algorithm[InputT, OutputT]
 
   def errorGraph(e: Throwable): Graph = Graph.errorGraph(Graph.algorithmLabel, e)
 }
 
-abstract class Algorithm[-InputT, +OutputT, +Context <: ExecutionContext] {
-  protected val context: Context
-
+abstract class Algorithm[-InputT, +OutputT] {
   type StateT
 
   val metrics: Seq[Metric[StateT]] = Seq.empty

@@ -4,6 +4,7 @@ import org.geneticmachine.navigation.vision._
 
 import breeze.linalg._
 import breeze.storage.Zero
+import scala.collection.mutable.ArrayBuffer
 import scala.math._
 import scala.reflect.ClassTag
 
@@ -186,6 +187,13 @@ package object navigation {
     val TurnRight: NavigationCommand = 2
 
     val max: Int = 3
+
+    def char(c: NavigationCommand): String = c match{
+      case TurnLeft => "TurnLeft"
+      case Forward => "Forward"
+      case TurnRight => "TurnRight"
+      case _ => "Unknown Command"
+    }
   }
 
   type Direction = Point
@@ -204,7 +212,7 @@ package object navigation {
     /**
      * Only for nice serialization.
      */
-    final def char(dir: Direction): Char = dir match {
+    def char(dir: Direction): Char = dir match {
       case `North` => 'V'
       case `South` => '^'
       case `West` => '>'
@@ -212,13 +220,15 @@ package object navigation {
       case _ => '?'
     }
 
-    final def fromChar(dirC: Char): Direction = dirC match {
+    def fromChar(dirC: Char): Direction = dirC match {
       case 'V' => North
       case '^' => South
       case '>' => West
       case '<' => East
       case _ => Zero
     }
+
+    def apply(dirC: Char): Direction = fromChar(dirC)
   }
 
   import Direction._
@@ -280,6 +290,8 @@ package object navigation {
 
     def forward = RobotPosition(point + direction, direction)
 
+    def backward = RobotPosition(point - direction, direction)
+
     def turnLeft = RobotPosition(point, direction.turnLeft)
 
     def turnRight = RobotPosition(point, direction.turnRight)
@@ -331,6 +343,17 @@ package object navigation {
       actionOpt(lab)(command).getOrElse(this)
     }
 
+    def reverseActions(lab: Labyrinth): Seq[(NavigationCommand, RobotPosition)] = {
+      Seq(
+        (NavigationCommand.TurnLeft, turnRight),
+        (NavigationCommand.TurnRight, turnLeft),
+        (NavigationCommand.Forward, backward)
+      ).filter {
+        case (action, rp) =>
+          rp.inLabyrinth(lab)
+      }
+    }
+
     def actions(lab: Labyrinth): Seq[(NavigationCommand, RobotPosition)] = {
       Seq (
         (NavigationCommand.TurnLeft, turnLeft),
@@ -379,10 +402,115 @@ package object navigation {
 
   type CostDict = Map[RobotPosition, Int]
 
+  type OptCostDict = Array[DenseMatrix[Int]]
+
   def costDict(lab: Labyrinth, from: RobotPosition, depth: Int = Int.MaxValue): CostDict = {
     breadthFirstSearch[RobotPosition](from, depth) { rp: RobotPosition =>
       rp.neighborsInLabyrinth(lab)
     }
+  }
+
+  def optimalAction(lab: Labyrinth, rp: RobotPosition, goal: Point): NavigationCommand = {
+    val optCostDict: OptCostDict = optimizedReverseCostDict(lab, goal)
+    optimalAction(lab, rp, goal, optCostDict)
+  }
+
+  def optimalAction(lab: Labyrinth, rp: RobotPosition, goal: Point, optCostDict: OptCostDict): NavigationCommand = {
+    val dirs = Map(North -> 0, East -> 1, South -> 2, West -> 3)
+
+    rp.actions(lab).map {
+      case (act, RobotPosition(Point(x, y), dir)) =>
+        val optDir = dirs(dir)
+        (act, optCostDict(optDir)(x, y))
+    }.filter { _._2 > -1 }.minBy { _._2 }._1
+  }
+
+  def optimizedReverseCostDict(lab: Labyrinth, goal: Point): OptCostDict = {
+    type Direction = Int
+
+    val costs = Array.fill(4) {
+      DenseMatrix.fill[Int](lab.rows, lab.cols)(-1)
+    }
+
+    @inline
+    def turnLeft(d: Direction): Direction = (d + 1) % 4
+
+    @inline
+    def turnRight(d: Direction): Direction = (d + 3) % 4
+
+    @inline
+    @unchecked
+    def backward(x: Int, y: Int, d: Direction): (Int, Int) = d match {
+      case 0 => (x - 1, y)
+      case 1 => (x, y + 1)
+      case 2 => (x + 1, y)
+      case 3 => (x, y - 1)
+    }
+
+    @inline
+    def check(x: Int, y: Int, d: Direction): Boolean = {
+      if (x >= 0 && x < lab.rows && y >= 0 && y < lab.cols) {
+        costs(d)(x, y) == -1 && lab(x, y) != CellStatus.Occupied
+      } else {
+        false
+      }
+    }
+
+    def bfs(open: Array[Int], cost: Int): Unit = {
+      val _open = new ArrayBuffer[Int](open.size)
+
+      var i: Int = 0
+
+      while (i < open.size) {
+        val x: Int = open(i)
+        val y: Int = open(i + 1)
+        val d: Int = open(i + 2)
+        i += 3
+
+
+        val (bx, by) = backward(x, y, d)
+
+        if (check(bx, by, d)) {
+          costs(d)(bx, by) = cost
+
+          _open += bx
+          _open += by
+          _open += d
+        }
+
+        val tl = turnRight(d)
+
+        if (check(x, y, tl)) {
+          costs(tl)(x, y) = cost
+
+          _open += x
+          _open += y
+          _open += tl
+        }
+
+        val tr = turnLeft(d)
+
+        if (check(x, y, tr)) {
+          costs(tr)(x, y) = cost
+
+          _open += x
+          _open += y
+          _open += tr
+        }
+      }
+
+      if (_open.size > 0) {
+        bfs(_open.toArray, cost + 1)
+      }
+    }
+
+    val startOpen = (0 until 4).flatMap { i =>
+      costs(i)(goal.x, goal.y) = 0
+      Seq(goal.x, goal.y, i)
+    }.toArray
+
+    bfs(startOpen, 1)
+    costs
   }
 
   /**
@@ -486,7 +614,7 @@ package object navigation {
     }
   }
 
-  case class NavigationInput(lab: Labyrinth, robotPosition: RobotPosition, goal: Point) {
+  case class NavigationInput(lab: Labyrinth, robotPosition: RobotPosition, goal: Point, feedback: Double = 0.0) {
     def observation: VisionObservation = VisionObservation(lab, robotPosition).orientated
   }
 
@@ -525,7 +653,7 @@ package object navigation {
 
   type NavigationOutput = NavigationCommand
 
-  abstract class LabyrinthAlgorithm[+C <: ExecutionContext] extends Algorithm[NavigationInput, NavigationOutput, C]
+  type NavigationAlgorithm = Algorithm[NavigationInput, NavigationOutput]
 
-  abstract class LabyrinthAlgorithmGen[-C <: ExecutionContext] extends AlgorithmGen[NavigationInput, NavigationOutput, C]
+  type NavigationAlgorithmGen[-C <: ExecutionContext] = AlgorithmGen[NavigationInput, NavigationOutput, C]
 }

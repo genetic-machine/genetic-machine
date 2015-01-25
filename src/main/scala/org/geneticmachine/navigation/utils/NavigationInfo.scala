@@ -5,7 +5,7 @@ import org.geneticmachine.{ExperimentResult, FinalState, PairResult}
 import org.geneticmachine.navigation._
 import org.geneticmachine.Experiment._
 
-object LabyrinthInfo {
+object NavigationInfo {
   private def foldHistory(hist: Seq[RobotPosition]): Map[Point, Map[Direction, Int]] = {
     def foldPoint(acc: Map[Point, Map[Direction, Int]], rp: RobotPosition): Map[Point, Map[Direction, Int]] = {
       val pointHist = if (acc.contains(rp.point)) {
@@ -90,7 +90,17 @@ object LabyrinthInfo {
     s"$header\n$splitter\n$body"
   }
 
-  def formatLabyrinthState(state: NavigationState): String = {
+  def getFig(lab: Labyrinth, hist: List[RobotPosition], goal: Point): String = {
+    val h = historyToDict(hist)
+
+    charMatrixToString {
+      val m = applyHistoryDict(labToCharMatrix(lab), h)
+      m(goal.x, goal.y) = goalSymbol
+      m
+    }
+  }
+
+  def formatNavigationState(state: NavigationState): String = {
     val hist = historyToDict(state.path)
 
     def getFig(lab: Labyrinth): String = {
@@ -122,7 +132,7 @@ object LabyrinthInfo {
    *
    */
   def formatInfo(result: FinalState[NavigationState]): String = {
-    val labFig = formatLabyrinthState(result.finalState)
+    val labFig = formatNavigationState(result.finalState)
 
     val metrics = (for {
       (metric, value) <- result.metrics

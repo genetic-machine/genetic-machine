@@ -8,9 +8,14 @@ final class SimpleMachine[+C <: ExecutionContext]
     (implicit val executionContext: C, implicit val db: DBDriver)
   extends Machine[C] {
 
-  def submit[I, O, S, C1 >: C](experiment: Experiment[I, O, S, C1]): Future[ExperimentResult[S]] = {
+  val log = executionContext.logger
 
+  def submit[I, O, S, C1 >: C <: ExecutionContext](experiment: Experiment[I, O, S, C1]): Future[ExperimentResult[S]] = {
     import executionContext.futureExecutionContext
+
+    log.info {
+      s"Executing:\n${experiment.scheme}"
+    }
 
     def foldExperiment(ex: Experiment[I, O, S, C1], acc: List[PairResult[S]]): Future[ExperimentResult[S]] = {
       val nextOpt = ex.next(ExperimentResult(acc))

@@ -5,14 +5,14 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 object IntEnvironmentGen extends EnvironmentGen[Int, Int, List[Int], ExecutionContext] {
-  def apply[C <: ExecutionContext](c: C): IntEnvironment = {
+  def apply(c: ExecutionContext): IntEnvironment = {
     new IntEnvironment(10)(c)
   }
 }
 
 final class IntEnvironment(val max: Int)
                           (val context: ExecutionContext)
-  extends Environment[Int, Int, List[Int], ExecutionContext] {
+  extends Environment[Int, Int, List[Int]] {
 
   def input(): Int = {
     scala.util.Random.nextInt(100)
@@ -35,7 +35,7 @@ final class IntEnvironment(val max: Int)
   }
 
   def serialize(status: List[Int]): Future[Graph] = Future.successful {
-    val props = Map("history", status.toArray)
+    val props = Map("history" -> status.toArray)
 
     Graph.single(Graph.environmentLabel)("IntEnvironment", props)
   }

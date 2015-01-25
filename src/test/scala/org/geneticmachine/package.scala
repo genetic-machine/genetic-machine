@@ -4,7 +4,7 @@ import java.io._
 import org.scalatest._
 
 
-package object geneneticmachine {
+package object geneticmachine {
 
   object SlowTest extends Tag("geneticmachine.test.tags.SlowTest")
 

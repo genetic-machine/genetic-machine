@@ -11,17 +11,19 @@ import org.geneticmachine.common.graph.Graph
 object BrownianWalker extends AlgorithmGen[NavigationInput, NavigationOutput, ExecutionContext] {
   override def toString: String = "Brownian Walker"
 
-  override def apply[C <: ExecutionContext](c: C): BrownianWalker = new BrownianWalker(c)
+  override def apply(c: ExecutionContext): Algorithm[NavigationInput, NavigationOutput] = new BrownianWalker(c)
 
   def empty: Graph = Graph.empty(Graph.algorithmLabel, "NavigationInput", "NavigationOutput")
 }
 
-case class BrownianWalker(private val context: ExecutionContext)
-  extends Algorithm[NavigationInput, NavigationCommand, ExecutionContext] {
+class BrownianWalker(protected val context: ExecutionContext)
+  extends Algorithm[NavigationInput, NavigationCommand] {
+
+  type Context = ExecutionContext
 
   type StateT = Int
 
-  val commandDist = for {
+  val commandDist: Rand[Int] = for {
     cId <- Rand.randInt(3)
   } yield cId
 
@@ -31,10 +33,10 @@ case class BrownianWalker(private val context: ExecutionContext)
 
   override def init(parent: Option[Graph]): Future[Int] = Future.successful { 0 }
 
-  override def input(stepCounter: Int, data: NavigationInput): Future[(Integer, NavigationCommand)] = {
+  override def act(stepCounter: Int, data: NavigationInput): Future[(Int, NavigationCommand)] = {
     Future.successful {
       val command: NavigationCommand = commandDist.draw()
-      val newState: Integer = stepCounter + 1
+      val newState: Int = stepCounter + 1
       (newState, command)
     }
   }

@@ -1,9 +1,11 @@
 package org.geneticmachine.navigation.utils
 
+import java.io.PrintWriter
+
 import org.geneticmachine.{FinalState, ExperimentResult, PairResult}
 import org.geneticmachine.navigation._
 
-object LabyrinthSVG {
+object NavigationSVG {
 
   implicit val scale: Int = 20
 
@@ -20,6 +22,14 @@ object LabyrinthSVG {
     def h: Int
 
     def asString: String = s"""<svg width="100%" height="100%">$toString</svg>"""
+
+    def save(file: String): Unit = {
+      val f = new PrintWriter(file)
+
+      f.write(asString)
+
+      f.close()
+    }
   }
 
   class Rect(val x: Int, val y: Int, val color: String, val w: Int = scale, val h: Int = scale) extends SVGObj {
@@ -101,6 +111,8 @@ object LabyrinthSVG {
     override def toString: String = {
       s"""<svg x="$x" y="$y" width="$w" height="$h">${"\n"}${children.mkString("\n")}${"\n"}</svg>"""
     }
+
+
   }
 
   def labyrinth(lab: Labyrinth): SVG = {
@@ -126,6 +138,6 @@ object LabyrinthSVG {
   def apply(result: FinalState[NavigationState]): SVG = apply(result.finalState)
 
   def apply(result: ExperimentResult[NavigationState]): SVG = {
-    SVG.vertConcat(result.steps.map(LabyrinthSVG.apply), 25)
+    SVG.vertConcat(result.steps.map(NavigationSVG.apply), 25)
   }
 }
