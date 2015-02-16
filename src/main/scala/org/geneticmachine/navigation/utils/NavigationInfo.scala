@@ -93,7 +93,7 @@ object NavigationInfo {
   def getFig(lab: Labyrinth, hist: List[RobotPosition], goal: Point): String = {
     val h = historyToDict(hist)
 
-    charMatrixToString {
+    matrixToString {
       val m = applyHistoryDict(labToCharMatrix(lab), h)
       m(goal.x, goal.y) = goalSymbol
       m
@@ -104,7 +104,7 @@ object NavigationInfo {
     val hist = historyToDict(state.path)
 
     def getFig(lab: Labyrinth): String = {
-      charMatrixToString {
+      matrixToString {
         val m = applyHistoryDict(labToCharMatrix(lab), hist)
         val goal = state.goal
         m(goal.x, goal.y) = goalSymbol

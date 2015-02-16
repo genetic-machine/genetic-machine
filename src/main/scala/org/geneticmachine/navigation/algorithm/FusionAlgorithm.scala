@@ -29,7 +29,7 @@ class FusionAlgorithmImpl(val context: ExecutionContext)
 
   import context.futureExecutionContext
 
-  val perception: (NavigationInput) => InnerObservation = InnerObservation.fromLabyrinthInput(senses)
+  val perception: NavigationInput => InnerObservation = InnerObservation.fromLabyrinthInput(senses)
 
   val log = context.logger
 
@@ -110,25 +110,14 @@ class FusionAlgorithmImpl(val context: ExecutionContext)
         gs(i).currentGain * logistic(gs(i).strength)
       }
     }
+    val command = gs(bestGene).action
 
-    if (gs(bestGene).currentGain < 0.0) {
-      log.info{
-        s"Forced mutation due to negative best gain = ${gs(bestGene).currentGain}!"
-      }
-
-      val mutated = forcedMutation(gs, input)
-      action(state.copy(entities = mutated), input)
-    } else {
-
-      val command = gs(bestGene).action
-
-      log.info {
-        s"Best gain: ${gs(bestGene).currentGain}\n" +
-          s"Best gain * str: ${gs(bestGene).currentGain * logistic(gs(bestGene).strength)}"
-      }
-
-      (Population(gs, bestGene, Some(obs), Some(command)), command)
+    log.info {
+      s"Best gain: ${gs(bestGene).currentGain}\n" +
+        s"Best gain * str: ${gs(bestGene).currentGain * logistic(gs(bestGene).strength)}"
     }
+
+    (Population(gs, bestGene, Some(obs), Some(command)), command)
   }
 
   override def act(state: Population, input: NavigationInput): Future[(Population, NavigationOutput)] = {
@@ -139,24 +128,29 @@ class FusionAlgorithmImpl(val context: ExecutionContext)
 
   protected def feedback(state: Population, feedback: Double): Future[Population] = Future {
     log.info(s"Feedback: $feedback")
-    val command = state.command.get
+    if (state.command.isDefined) {
 
-    val bestGene = state.entities(state.activeGene)
+      val command = state.command.get
 
-    log.info(s"Best gene:\n$bestGene")
+      val bestGene = state.entities(state.activeGene)
 
-    log.info {
-      s"Delta str: ${bestGene.withFeedback(command)(feedback).strength - bestGene.strength}" +
-      s"/ ${bestGene.strength}"
+      log.info(s"Best gene:\n$bestGene")
+
+      log.info {
+        s"Delta str: ${bestGene.withFeedback(command)(feedback).strength - bestGene.strength}" +
+          s"/ ${bestGene.strength}"
+      }
+
+      val populationWithFeedback = state.entities.map {
+        g => g.withFeedback(command)(feedback)
+      }
+
+      val postObservation = PostObservation(state.input.get, command, feedback)
+      val updatedPopulation = evolution(postObservation)(populationWithFeedback)
+
+      Population(updatedPopulation, state.activeGene)
+    } else {
+      state
     }
-
-    val populationWithFeedback = state.entities.map {
-      g => g.withFeedback(command)(feedback)
-    }
-
-    val postObservation = PostObservation(state.input.get, command, feedback)
-    val updatedPopulation = evolution(postObservation)(populationWithFeedback)
-
-    Population(updatedPopulation, state.activeGene)
   }
 }

@@ -61,7 +61,7 @@ final case class LabyrinthPattern(matrix: DenseMatrix[Double], abstractCoefs: Ar
       (x, i) <- abstractCoefs.zipWithIndex
     } yield s"${"%.1f" format x} s$i").mkString(" + ")
 
-    s"$abstractEquation + \n${printMatrixPattern(matrix)}"
+    s"$abstractEquation + \n${greyMap(matrix, normalize = false)}"
   }
 }
 
@@ -93,7 +93,7 @@ final class Gene(val pattern: LabyrinthPattern, val action: NavigationCommand)
   }
 
   override def toString: String = {
-    s"Strength: $strength, gain: $currentGain, action: $action\n$pattern"
+    s"Strength: $strength, gain: $currentGain, action: ${NavigationCommand.char(action)}\n$pattern"
   }
 
   def withGain(updatedGain: Double): Gene = {
@@ -115,19 +115,34 @@ final class Gene(val pattern: LabyrinthPattern, val action: NavigationCommand)
   }
 }
 
-object FusionMutator {
+trait MutatorParams {
+  val additionalCoefsLen: Int
 
-  def adaptive(patternR: Int, additionalCoefsLen: Int,
-               learningSpeed: Double, similarityCoef: Double,
-               defaultStrength: Double): AdaptiveMutator[Gene, PostObservation] = {
-        FusionMutator(patternR, additionalCoefsLen, learningSpeed, similarityCoef, defaultStrength)
+  val patternR: Int = 3
+  val patternRD: Int = 1
+
+  val learningSpeed: Double = 0.01
+  val similarityCoefs: Double = 0.1
+
+  val defaultStrength: Double = 0.1
+
+  val generationPatternD: Double = 0.5
+  val generationCoefsD: Double = 0.5
+
+  val adaptationPatternD: Double = 0.05
+  val adaptationCoefsD: Double = 0.05
+}
+
+object FusionMutator {
+  def adaptive(params: MutatorParams): AdaptiveMutator[Gene, PostObservation] = {
+        FusionMutator(params)
   }
 
   val patternDistGeneration = new Gaussian(0.0, 1.0)
   val coefDistGeneration = new Gaussian(0.0, 1.0)
 
-  val patternDistDelta = new Gaussian(0.0, 0.25)
-  val coefDistDelta = new Gaussian(0.0, 0.25)
+  val patternDistDelta = new Gaussian(0.0, 1.0)
+  val coefDistDelta = new Gaussian(0.0, 1.0)
 
   val crossoverDist = patternDistDelta
 
@@ -169,19 +184,33 @@ object FusionMutator {
 
 final case class PostObservation(obs: InnerObservation, command: NavigationCommand, feedback: Double)
 
-final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
-                               learningSpeed: Double, similarityCoef: Double, defaultStrength: Double)
-                              (postObs: PostObservation)
+final case class FusionMutator(params: MutatorParams)(postObs: PostObservation)
   extends Mutator[Gene] {
 
   import FusionMutator._
 
+  val additionalCoefsLen: Int = params.additionalCoefsLen
+
+  val patternR: Int = params.patternR
+  val patternRD: Int = params.patternRD
+
+  val learningSpeed: Double = params.learningSpeed
+  val similarityCoefs: Double = params.similarityCoefs
+
+  val defaultStrength: Double = params.defaultStrength
+
+  val generationPatternD: Double = params.generationPatternD
+  val generationCoefsD: Double = params.generationCoefsD
+
+  val adaptationPatternD: Double = params.adaptationPatternD
+  val adaptationCoefsD: Double = params.adaptationCoefsD
+
   override def generation(): Gene = {
     val currentVision = Labyrinth.copy(postObs.obs.vision, postObs.obs.from.point, patternR)(0: Int).map { _.toDouble }
 
-    val pattern = currentVision.map { _ + patternDistGeneration.draw() }
+    val pattern = currentVision.map { _ + patternDistGeneration.draw() * generationPatternD }
 
-    val coefs = postObs.obs.senses.map { s => scala.math.signum(s) + coefDistGeneration.draw() }
+    val coefs = postObs.obs.senses.map { _ + coefDistGeneration.draw() * generationCoefsD }
 
     val action = if (postObs.feedback >= 0.0) {
       postObs.command
@@ -189,7 +218,7 @@ final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
       actionDistExcept(postObs.command)
     }
 
-    Gene(LabyrinthPattern(pattern, coefs), actionDist.draw())(defaultStrength, 0.0)
+    Gene(LabyrinthPattern(pattern, coefs), action)(defaultStrength, 0.0)
   }
 
   override def generation(size: Int): Vector[Gene] = {
@@ -197,8 +226,9 @@ final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
     val currentSenses = postObs.obs.senses
 
     Vector.fill(size) {
-      val pattern = currentVision.map { _ + patternDistGeneration.draw() }
-      val coefs = currentSenses.map { s => scala.math.signum(s) + coefDistGeneration.draw() }
+      val pattern = currentVision.map { _ + patternDistGeneration.draw() * generationPatternD }
+      val coefs = currentSenses.map { _ + coefDistGeneration.draw() * generationCoefsD }
+
       val action = if (postObs.feedback >= 0.0) {
         postObs.command
       } else {
@@ -209,32 +239,29 @@ final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
     }
   }
 
-  def adopted(g: Gene): Gene = {
+  def adapted(g: Gene): Gene = {
     val personalFeedback = if (g.action == postObs.command) postObs.feedback else 0.0
+    val obs = postObs.obs
 
     val similarity = logistic(learningSpeed)(g.currentGain)
 
-    val adaptationRatio = similarity * personalFeedback
-    val noiseRatio = 1 - similarity
-
     val mPattern = Labyrinth.centredImpose { (v, p) =>
-      p + adaptationRatio * (v - p) + noiseRatio * patternDistDelta.draw()
-    }(postObs.obs.vision, postObs.obs.from.point)(g.pattern.matrix)
+      p + (similarity * (v - p) + (1 - similarity) * patternDistDelta.draw()) * adaptationPatternD
+    }(obs.vision, obs.from.point)(g.pattern.matrix)
 
-    val coefs = g.pattern.abstractCoefs.zip(postObs.obs.senses).map {
-      case (c: Double, s: Double) =>
-        c + adaptationRatio * (s - c) + noiseRatio * coefDistDelta.draw()
+    val coefs = g.pattern.abstractCoefs.zip(postObs.obs.senses).map { case (c, s) =>
+      c + (similarity * (s - c) + (1 - similarity) * coefDistDelta.draw()) * adaptationCoefsD
     }
 
     Gene(LabyrinthPattern(mPattern, coefs), g.action)(defaultStrength, 0.0)
   }
 
   override def pointMutation(g: Gene): Gene = {
-    adopted(g)
+    adapted(g)
   }
 
   override def pointMutation(gs: Vector[Gene]): Vector[Gene] = {
-    gs.map(adopted)
+    gs.map(adapted)
   }
 
   @inline
@@ -263,8 +290,8 @@ final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
 
   @inline
   private def mapPatternCrossover(g1: Gene, g2: Gene): DenseMatrix[Double] = {
-    val m1 = g1.pattern.matrix: MapPattern
-    val m2 = g2.pattern.matrix: MapPattern
+    val m1: MapPattern = g1.pattern.matrix
+    val m2: MapPattern = g2.pattern.matrix
 
     val r1 = m1.patternRadius.lInfNorm // max size, just in case
     val r2 = m2.patternRadius.lInfNorm
@@ -289,7 +316,7 @@ final case class FusionMutator(patternR: Int, additionalCoefsLen: Int,
 
     val action = crossoverAction(g1 , g2)
 
-    Gene(LabyrinthPattern(mapPattern, coefs), action)(defaultStrength, 0.0)
+    Gene(LabyrinthPattern(mapPattern, coefs), action)(params.defaultStrength, 0.0)
   }
 }
 

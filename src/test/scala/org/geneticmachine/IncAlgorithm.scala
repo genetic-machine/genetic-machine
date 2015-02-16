@@ -5,6 +5,9 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 object IncAlgorithmGen extends AlgorithmGen[Int, Int, ExecutionContext] {
+
+  override def toString: String = "IncAlgorithmGen"
+
   def apply(context: ExecutionContext): Algorithm[Int, Int] = {
     new IncAlgorithm(context)
   }

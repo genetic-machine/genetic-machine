@@ -4,6 +4,7 @@ import scala.collection.parallel.immutable.ParVector
 
 package object selector {
   final case class ThresholdSelector[G <: GeneStrength](threshold: Double) extends Selector[ParVector[G]] {
+
     def apply(population: ParVector[G]): ParVector[G] = {
       population.filter { g: G =>
         g.strength > threshold

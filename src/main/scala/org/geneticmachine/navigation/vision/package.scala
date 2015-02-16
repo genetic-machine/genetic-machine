@@ -1,63 +1,87 @@
 package org.geneticmachine.navigation
 
 package object vision {
+
+  type VisionMap = Labyrinth
+
   trait Vision extends Serializable {
     def apply(labyrinth: Labyrinth, from: RobotPosition): VisionObservation
   }
 
-  final case class VisionObservation(visionMap: Labyrinth, from: RobotPosition) {
+  object Vision {
+  }
 
-    override def toString: String = s"Observation($from):\n$visionMap"
+  case class VisionObservation(visionMap: VisionMap, from: RobotPosition) {
+    private type CoordTransform = (Int, Int) => (Int, Int)
+
+    private def counterClockwise: CoordTransform = (x, y) => (visionMap.cols - y - 1, x)
+    private def clockwise: CoordTransform = (x, y) => (y, visionMap.rows - x - 1)
+    private def upsideDown: CoordTransform = (x, y) => (visionMap.rows - x - 1, visionMap.cols - y - 1)
+
+    override def toString: String = {
+      val vis = labToCharMatrix(visionMap)
+      vis(from.point.x, from.point.y) = Direction.char(from.direction)
+      matrixToString(vis)
+    }
 
     def impose(lab: Labyrinth): Labyrinth = {
-      val depth = (visionMap.rows - 1) / 2
+      val r: Int = { (visionMap.rows - 1) / 2 }
+      def rows = -r to r
+      def cols = -r to r
+
+      val p = from.point
+
       for {
-        x <- 0 until visionMap.rows
-        y <- 0 until visionMap.cols
-        labX = x + from.point.x - depth
-        labY = y + from.point.y - depth
-        if labX >= 0
-        if labY >= 0
-        if labX < lab.rows
-        if labY < lab.cols
-        if visionMap(x, y) != CellStatus.Unknown
+        x <- rows
+        y <- cols
+        labX = p.x + x
+        labY = p.y + y
+        if labX >= 0 && labY >= 0 && labX < lab.rows && labY < lab.cols
+        if visionMap(x + r, y + r) != CellStatus.Unknown
       } {
-        lab(labX, labY) = visionMap(x, y)
+        lab(labX, labY) = visionMap(x + r, y + r)
       }
 
       lab
     }
 
-    def turn(coordTransform: (Int, Int) => (Int, Int), size: (Int, Int)): Labyrinth = {
-      val map = Labyrinth.unknown(size._1, size._2)
-
-      for (row <- 0 until visionMap.rows; col <- 0 until visionMap.cols) {
-        val (tRow, tCol) = coordTransform(row, col)
-        map(tRow, tCol) = visionMap(row, col)
+    private def coordTransform(tr: CoordTransform)(m1: Labyrinth, m2: Labyrinth): Labyrinth = {
+      for {
+        i <- 0 until m1.rows
+        j <- 0 until m1.cols
+        (x, y) = tr(i, j)
+      } {
+        m2(x, y) = m1(i, j)
       }
 
-      map
+      m2
     }
 
-    val eastTransform = (row: Int, col: Int) => (col, visionMap.rows - row - 1)
-    val westTransform = (row: Int, col: Int) => (visionMap.cols - col - 1, row)
-    val southTransform = (row: Int, col: Int) => (visionMap.rows - row - 1, visionMap.cols - col - 1)
 
-    def turnNorth = this
+    private def turnNorth: VisionObservation = this
 
-    def turnEast: VisionObservation = {
-      val tPos = RobotPosition(from.point.map(eastTransform), from.direction.turnRight)
-      VisionObservation(turn(eastTransform, (visionMap.cols, visionMap.rows)), tPos)
+    private def turnSouth: VisionObservation = {
+      val m = Labyrinth.unknown(visionMap.rows, visionMap.cols)
+      coordTransform(upsideDown)(visionMap, m)
+      val (fx, fy) = upsideDown(from.point.x, from.point.y)
+
+      VisionObservation(m, RobotPosition(Point(fx, fy), Direction.North))
     }
 
-    def turnWest: VisionObservation = {
-      val tPos = RobotPosition(from.point.map(westTransform), from.direction.turnLeft)
-      VisionObservation(turn(westTransform, (visionMap.cols, visionMap.rows)), tPos)
+    private def turnWest: VisionObservation = {
+      val m = Labyrinth.unknown(visionMap.cols, visionMap.rows)
+      coordTransform(clockwise)(visionMap, m)
+      val (fx, fy) = clockwise(from.point.x, from.point.y)
+
+      VisionObservation(m, RobotPosition(Point(fx, fy), Direction.North))
     }
 
-    def turnSouth: VisionObservation = {
-      val tPos = RobotPosition(from.point.map(southTransform), from.direction.reverse)
-      VisionObservation(turn(southTransform, (visionMap.rows, visionMap.cols)), tPos)
+    private def turnEast: VisionObservation = {
+      val m = Labyrinth.unknown(visionMap.cols, visionMap.rows)
+      coordTransform(counterClockwise)(visionMap, m)
+      val (fx, fy) = counterClockwise(from.point.x, from.point.y)
+
+      VisionObservation(m, RobotPosition(Point(fx, fy), Direction.North))
     }
 
     def orientated: VisionObservation = from.direction match {
@@ -66,7 +90,9 @@ package object vision {
       case Direction.West => turnWest
       case Direction.East => turnEast
     }
+
+
   }
 
-  type Pattern = (VisionObservation) => Double
+  type Pattern = VisionObservation => Double
 }

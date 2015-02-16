@@ -5,11 +5,16 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 abstract class EnvironmentGen[+InputT, -OutputT, StateT, -Context <: ExecutionContext] {
+
+  override def toString: String = this.getClass.getSimpleName
+
   def apply(c: Context): Environment[InputT, OutputT, StateT]
 }
 
 abstract class Environment[+InputT, -OutputT, StateT]
   extends Serializable {
+
+  override def toString: String = this.getClass.getSimpleName
 
   val metrics: Seq[Metric[StateT]] = Seq.empty
 

@@ -5,7 +5,7 @@ import org.geneticmachine.navigation._
 object LaplacePotentialFeedback {
   def apply(scalePos: Double, scaleNeg: Double): FeedbackStrategyGenerator = {
     FeedbackStrategyGenerator { initialState: NavigationState =>
-      val costDict = reverseCostDict(initialState.labyrinth, initialState.goal)
+      val costDict = reversedCostDict(initialState.labyrinth, initialState.goal)
       new LaplacePotentialFeedback(costDict, scalePos, scaleNeg)
     }
   }
@@ -17,8 +17,8 @@ class LaplacePotentialFeedback(val costDict: CostDict, val scalePos: Double, val
   override def toString: String = "Laplace's potential feedback"
 
   def apply(status: NavigationState, action: NavigationCommand): Double = {
-    val currentCost = costDict(status.robotPosition)
-    val updatedCost = costDict(status.robotPosition.action(status.labyrinth)(action))
+    val currentCost = costF(costDict)(status.robotPosition)
+    val updatedCost = costF(costDict)(status.robotPosition.action(status.labyrinth)(action))
 
     val f = currentCost - updatedCost
 

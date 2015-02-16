@@ -1,24 +1,14 @@
 package org.geneticmachine
 
-import org.geneticmachine.navigation.vision._
-
 import breeze.linalg._
 import breeze.storage.Zero
 import scala.collection.mutable.ArrayBuffer
-import scala.math._
 import scala.reflect.ClassTag
 
+import org.geneticmachine.navigation.vision._
+
 package object navigation {
-
   type CellStatus = Int
-
-  object CellStatus {
-    final val Free: CellStatus = -1
-    final val Occupied: CellStatus = 1
-    final val Unknown: CellStatus = 0
-    final val startPosition: CellStatus = -2
-    final val goal: CellStatus = -3
-  }
 
   import CellStatus._
 
@@ -32,150 +22,7 @@ package object navigation {
     new DenseMatrix[A](rows, cols, array, 0)
   }
 
-  object Labyrinth {
-    def unknown(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Unknown)
-    def occupied(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Occupied)
-    def free(rows: Int, cols: Int): Labyrinth = DenseMatrix.fill[Int](rows, cols)(Free)
-
-    def toArray(lab: Labyrinth): (Array[CellStatus], Int, Int) = matrixToArray(lab)
-
-    def copy[A : ClassTag : Zero](m: DenseMatrix[A], from: Point, to: Point)(zero: A): DenseMatrix[A] = {
-      val cm = DenseMatrix.fill[A](to.x - from.x + 1, to.y - from.y + 1)(zero)
-
-      for (i <- (from.x max 0) to (to.x min (m.rows - 1));
-           j <- (from.y max 0) to (to.y min (m.cols - 1))) {
-        val copyI = i - from.x
-        val copyJ = j - from.y
-        cm(copyI, copyJ) = m(i, j)
-      }
-
-      cm
-    }
-
-    def copy[A : ClassTag : Zero](m: DenseMatrix[A], from: Point, r: Int)(zero: A): DenseMatrix[A] = {
-      copy(m, from - r, from + r)(zero)
-    }
-
-    def centredImpose(f: (CellStatus, Double) => Double)(map: DenseMatrix[CellStatus], from: Point)
-                     (pattern: DenseMatrix[Double]): DenseMatrix[Double] = {
-
-      val r = ((pattern.rows - 1) / 2) min ((pattern.cols - 1) / 2)
-      val min = (from - r) max Point.zero
-      val max = (from + r) min Point(map.rows - 1, map.cols - 1)
-
-      val m = DenseMatrix.zeros[Double](pattern.rows, pattern.cols)
-
-      for (i <- min.x to max.x ; j <- min.y to max.y) {
-        val v1 = map(i, j)
-        val v2 = pattern(i - min.x, j - min.y)
-        m(i - min.x, j - min.y) = f(v1, v2)
-      }
-
-      m
-    }
-  }
-
   type CostMap = DenseMatrix[Int]
-
-  /**
-   * It is not a complex value, it represents 2D vector.
-   * 10x faster creation than through Vector[Int]
-   */
-  final case class Point(x: Int, y: Int) {
-
-    /** Translation operators **/
-    def left: Point =  Point(x - 1, y)
-
-    def right: Point = Point(x + 1, y)
-
-    def backward: Point = Point(x, y - 1)
-
-    def forward: Point = Point(x, y + 1)
-
-    def neighbors: Seq[Point] = Seq(left, right, backward, forward)
-
-    def +(num: Int): Point = Point(this.x + num, this.y + num)
-
-    def +(other: Point) = Point(this.x + other.x, this.y + other.y)
-
-    def -(num: Int): Point = this + (-num)
-
-    def -(other: Point) = Point(this.x - other.x, this.y - other.y)
-
-    /** Rotation operators **/
-    def turnLeft: Point = Point(-y ,x)
-
-    def turnRight: Point = Point(y, -x)
-
-    def reverse: Point = Point(-x, -y)
-
-    /** But it is the complex multiplication, i.e. rotation. **/
-    def *(other: Point) = Point(this.x * other.x - this.y * other.y,
-      this.y * other.x + this.x * other.y)
-
-    def *(scale: Int) = Point(this.x * scale, this.y * scale)
-
-    /** Vector multiplication **/
-    def <*>(other: Point): Int = this.x * other.x + this.y * other.y
-
-    def max(other: Point) = Point(this.x max other.x, this.y max other.y)
-    def min(other: Point) = Point(this.x min other.x, this.y min other.y)
-
-    /** It isn't the complex division, but rotation in the direction opposite to `other`! **/
-    def /(other: Point) = this * other.adjoint
-
-    def adjoint: Point = Point(x, -y)
-
-    /** Norm operators **/
-    def lInfNorm: Int = abs(x) max abs(y)
-
-    def l1Norm: Int = abs(x) + abs(y)
-
-    def l2Norm: Double = {
-      val xDouble = x.toDouble
-      val yDouble = y.toDouble
-      sqrt(xDouble * xDouble + yDouble * yDouble)
-    }
-
-    def normed: (Double, Double) = {
-      val z = l2Norm
-      (this.x / z, this.y / z)
-    }
-
-    /**
-     * Is an equalent to (this / this.l2Norm) <*> (other / other.l2Norm)
-     */
-    def angle(other: Point): Double = {
-      val (x, y) = this.normed
-      val (tX, tY) = other.normed
-
-      x * tX + y * tY
-    }
-
-    /** Labyrinth operators **/
-    def inBorders(sizeX: Int, sizeY: Int): Boolean = (x >= 0) && (x < sizeX) && (y >= 0) && (y < sizeY)
-
-    /** Note: if point is [[Unknown]] cell of `lab` it returns `true`. **/
-    def inLabyrinth(lab: Labyrinth): Boolean = inBorders(lab.rows, lab.cols) && (lab(x, y) != Occupied)
-
-    def neighborsInLabyrinth(lab: Labyrinth) = neighbors filter { _.inLabyrinth(lab) }
-
-    /** 'Crop' operator */
-    def %(lab: Labyrinth): Point = {
-      val x_ = (0 max x) min (lab.rows - 1)
-      val y_ = (0 max y) min (lab.cols - 1)
-      Point(x_, y_)
-    }
-
-    def map(f: (Int, Int) => (Int, Int)): Point = {
-      val (tX, tY) = f(x, y)
-      Point(tX, tY)
-    }
-  }
-
-  object Point {
-    val zero = Point(0, 0)
-  }
 
   type Path = List[RobotPosition]
 
@@ -229,64 +76,20 @@ package object navigation {
     }
 
     def apply(dirC: Char): Direction = fromChar(dirC)
+
+    private val dirToId = Map(North -> 0, East -> 1, South -> 2, West -> 3)
+    private val idToDir = Array(North, East, South, West)
+
+    def id(dir: Direction): Int = dirToId(dir)
+
+    def apply(id: Int): Direction = idToDir(id)
   }
 
   import Direction._
 
-  /**
-   * General BFS algorithm.
-   * @param depth maximal depth
-   * @param neighbor generates states reachable from given point.
-   *                 Cost between current and produced states is assumed to be 1.
-   * @tparam A type of state
-   * @return cost map: state -> cost
-   */
-  def breadthFirstSearch[A](from: A, depth: Int = Int.MaxValue)(neighbor: A => Seq[A]): Map[A, Int] = {
-    def bfs(open: Set[A], depth: Int, cost: Map[A, Int]): Map[A, Int] = {
-      val wave = (for {
-        state <- open
-        n <- neighbor(state)
-        if !cost.contains(n) || cost(n) > cost(state) + 1
-      } yield (n, cost(state) + 1)).toMap
-
-      if (wave.nonEmpty && depth > 0) {
-        bfs(wave.keySet, depth - 1, cost ++ wave)
-      } else {
-        cost
-      }
-    }
-    bfs(Set[A](from), depth, Map[A, Int](from -> 0))
-  }
-
-  /**
-   * Potential map of labyrinth without respect to robot's direction.
-   * Optimized bfs.
-   */
-  def costMapWithoutDirection(lab: Labyrinth, from: Point, depth: Int = Int.MaxValue): DenseMatrix[Int] = {
-    val costMap = DenseMatrix.fill(lab.rows, lab.cols)(Int.MaxValue)
-    costMap(from.x, from.y) = 0
-
-    def bfs(openSet: Set[Point], closedSet: Set[Point], depth: Int) {
-      val newOpenSet = for {
-        p <- openSet
-        n <- p.neighborsInLabyrinth(lab)
-        if !closedSet.contains(n)
-        if costMap(n.x, n.y) > costMap(p.x, p.y) + 1
-      } yield {
-        costMap(n.x, n.y) = costMap(p.x, p.y) + 1
-        n
-      }
-
-      if (newOpenSet.nonEmpty && depth > 0) {
-        bfs(newOpenSet, closedSet.union(openSet), depth - 1)
-      }
-    }
-
-    bfs(Set[Point](from), Set.empty[Point], depth)
-    costMap
-  }
-
   final case class RobotPosition(point: Point, direction: Direction) {
+
+    override def toString: String = s"(${point.x}, ${point.y}, ${Direction.char(direction)})"
 
     def forward = RobotPosition(point + direction, direction)
 
@@ -344,93 +147,58 @@ package object navigation {
     }
 
     def reverseActions(lab: Labyrinth): Seq[(NavigationCommand, RobotPosition)] = {
-      Seq(
-        (NavigationCommand.TurnLeft, turnRight),
-        (NavigationCommand.TurnRight, turnLeft),
-        (NavigationCommand.Forward, backward)
-      ).filter {
+      import NavigationCommand._
+
+      Seq( (TurnLeft, turnRight), (TurnRight, turnLeft), (Forward, backward) ).filter {
         case (action, rp) =>
           rp.inLabyrinth(lab)
       }
     }
 
     def actions(lab: Labyrinth): Seq[(NavigationCommand, RobotPosition)] = {
-      Seq (
-        (NavigationCommand.TurnLeft, turnLeft),
-        (NavigationCommand.Forward, forward),
-        (NavigationCommand.TurnRight, turnRight)
-      ).filter { actionPos =>
-        actionPos._2.inLabyrinth(lab)
+      import NavigationCommand._
+
+      if (forward.inLabyrinth(lab)) {
+        Seq( (TurnLeft, turnLeft), (Forward, forward), (TurnRight, turnRight) )
+      } else {
+        Seq( (TurnLeft, turnLeft), (TurnRight, turnRight) )
       }
     }
   }
 
-  /**
-   * Potential map of labyrinth with respect to robot's direction.
-   */
-  def costMap(lab: Labyrinth, from: RobotPosition, depth: Int = Int.MaxValue): DenseMatrix[Int] = {
-    val cost = costDict(lab, from, depth)
+  type CostDict = Array[DenseMatrix[Int]]
 
-    val potentialMap = DenseMatrix.fill[Int](lab.rows, lab.cols)(Int.MaxValue)
-    for ((rp, value) <- cost) {
-      potentialMap(rp.point.x, rp.point.y) = potentialMap(rp.point.x, rp.point.y) min value
-    }
-
-    potentialMap
-  }
-
-  def reverseCostMap(lab: Labyrinth, goal: Point): DenseMatrix[Int] = {
-
-    def matrixMin(ms: Seq[DenseMatrix[Int]]): DenseMatrix[Int] = {
-      val acc = ms(0).copy
-
-      for (m <- ms.tail) {
-        for (i <- 0 until acc.rows; j <- 0 until acc.cols) {
-          acc(i, j) = acc(i, j) min m(i, j)
-        }
-      }
-
-      acc
-    }
-
-    matrixMin {
-      directions.map { dir =>
-        costMap(lab, RobotPosition(goal, dir))
-      }
-    }
-  }
-
-  type CostDict = Map[RobotPosition, Int]
-
-  type OptCostDict = Array[DenseMatrix[Int]]
-
-  def costDict(lab: Labyrinth, from: RobotPosition, depth: Int = Int.MaxValue): CostDict = {
-    breadthFirstSearch[RobotPosition](from, depth) { rp: RobotPosition =>
-      rp.neighborsInLabyrinth(lab)
-    }
+  def costF(costDict: CostDict)(rp: RobotPosition): Int = {
+    costDict(Direction.id(rp.direction))(rp.point.x, rp.point.y)
   }
 
   def optimalAction(lab: Labyrinth, rp: RobotPosition, goal: Point): NavigationCommand = {
-    val optCostDict: OptCostDict = optimizedReverseCostDict(lab, goal)
+    val optCostDict: CostDict = reversedCostDict(lab, goal)
     optimalAction(lab, rp, goal, optCostDict)
   }
 
-  def optimalAction(lab: Labyrinth, rp: RobotPosition, goal: Point, optCostDict: OptCostDict): NavigationCommand = {
-    val dirs = Map(North -> 0, East -> 1, South -> 2, West -> 3)
+  def optimalAction(lab: Labyrinth, rp: RobotPosition, goal: Point, optCostDict: CostDict): NavigationCommand = {
+    val cost = costF(optCostDict) _
 
     rp.actions(lab).map {
-      case (act, RobotPosition(Point(x, y), dir)) =>
-        val optDir = dirs(dir)
-        (act, optCostDict(optDir)(x, y))
-    }.filter { _._2 > -1 }.minBy { _._2 }._1
+      case (act, p) => (act, cost(p))
+    }.filter {
+      case (act, c) => c > -1
+    }.minBy {
+      case (act, c) => c
+    }._1
   }
 
-  def optimizedReverseCostDict(lab: Labyrinth, goal: Point): OptCostDict = {
-    type Direction = Int
-
+  def reversedCostDict(lab: Labyrinth, goal: Point): CostDict = {
     val costs = Array.fill(4) {
       DenseMatrix.fill[Int](lab.rows, lab.cols)(-1)
     }
+
+    reversedCostDict(lab, goal, costs)
+  }
+
+  def reversedCostDict(lab: Labyrinth, goal: Point, costs: Array[DenseMatrix[Int]]): CostDict = {
+    type Direction = Int
 
     @inline
     def turnLeft(d: Direction): Direction = (d + 1) % 4
@@ -513,36 +281,6 @@ package object navigation {
     costs
   }
 
-  /**
-   * Cost dict from goal to all possible positions. Since goal isn't [[RobotPosition]] i.e.
-   * doesn't contain [[Direction]], this method takes minimum for each cell
-   * for all possible directions in goal position.
-   */
-  def reverseCostDict(lab: Labyrinth, goal: Point): CostDict = {
-    directions.map { dir =>
-      breadthFirstSearch[RobotPosition](RobotPosition(goal, dir)) { rp: RobotPosition =>
-        rp.neighborsInLabyrinth(lab).map { n: RobotPosition => n.reverse }
-      }
-    }.reduceLeft { (d1: CostDict, d2: CostDict) =>
-      (for {
-        (rp, cost1) <- d1
-        cost2 = d2(rp)
-      } yield (rp, cost1 min cost2)).toMap
-    }
-  }
-
-  def costDictToMap(cost: CostDict): CostMap = {
-    val maxX = cost.keys.maxBy { rp: RobotPosition => rp.point.x }.point.x
-    val maxY = cost.keys.maxBy { rp: RobotPosition => rp.point.y }.point.y
-
-    val matrix = DenseMatrix.fill(maxX + 1, maxY + 1)(Int.MaxValue)
-    for ((rp, v) <- cost) {
-      matrix(rp.point.x, rp.point.y) = v min matrix(rp.point.x, rp.point.y)
-    }
-
-    matrix
-  }
-
   def labToCharMatrix(lab: Labyrinth): DenseMatrix[Char] = {
     lab.map {
       case `Free` => ' '
@@ -551,18 +289,19 @@ package object navigation {
     }
   }
 
-  def charMatrixToString(lab: DenseMatrix[Char]): String = {
+  def matrixToString[T](lab: DenseMatrix[T]): String = {
     val seqMatrix = for {
       x <- 0 until lab.rows
     } yield for {
         y <- 0 until lab.cols
-      } yield lab(x, y)
+        c = lab(x, y)
+      } yield s"$c$c"
 
     seqMatrix.map { _.mkString("") }.mkString("\n")
   }
 
   def printLab(lab: Labyrinth): String = {
-    charMatrixToString(labToCharMatrix(lab))
+    matrixToString(labToCharMatrix(lab))
   }
 
   val charSeq = Seq('#', '&', '*', '`', '-', '_', ' ')
@@ -577,7 +316,74 @@ package object navigation {
       }
     }
 
-    charMatrixToString(cm)
+    matrixToString(cm)
+  }
+
+  def greyMap(_m: DenseMatrix[Double], normalize: Boolean = false): String = {
+    val m = if (normalize) {
+      val (min, max) = minMax(_m)
+      (_m + min) / (max - min)
+    } else {
+      (_m.map { x =>
+        (x max -1.0) min 1.0
+      } + 1.0) / 2.0
+    }
+
+    val colors = (232 to 256).toArray
+
+    val esc: Char = 27
+    def color(x: Double): String = {
+      val c = colors(((x * colors.size).ceil.toInt max 0) min (colors.size - 1))
+
+      esc + "[48;5;" + c.toString + "m  " + esc + "[0m"
+    }
+
+    val seqMatrix = for {
+      x <- 0 until m.rows
+    } yield {
+      for {
+        y <- 0 until m.cols
+      } yield m(x, y)
+    }
+
+    seqMatrix.map { row => row.map { x => color(x) }.mkString("") }.mkString("\n")
+  }
+
+  def heatMap(_m: DenseMatrix[Double]): String = {
+    val z = max(_m.map { math.abs })
+    val m = _m.map { _ / z }
+
+    val redColors = 57.to(52, -1).toArray
+    val blueColors = (16 to 21).toArray
+
+    def red(x: Double): Int = {
+      redColors((x * redColors.size).ceil.toInt min (redColors.size - 1))
+    }
+
+    def blue(x: Double): Int = {
+      blueColors((-x * blueColors.size).ceil.toInt min (blueColors.size - 1))
+    }
+
+    val esc: Char = 27
+    def color(x: Double): String = {
+      val c = if (x > 0.0) {
+        red(x)
+      } else {
+        blue(x)
+      }
+
+      esc + "[48;5;" + c.toString + "m  " + esc + "[0m"
+    }
+
+    val seqMatrix = for {
+      x <- 0 until m.rows
+    } yield {
+      for {
+        y <- 0 until m.cols
+      } yield m(x, y)
+    }
+
+    seqMatrix.map { row => row.map { x => color(x) }.mkString("") }.mkString("\n")
   }
 
   type CommandSignal = Map[NavigationCommand, Double]
@@ -606,6 +412,7 @@ package object navigation {
   def directionToCommand(robotDirection: Direction)(direction: Direction): Seq[NavigationCommand] = {
     val robotDirectionLeft = robotDirection.turnLeft
     val robotDirectionRight = robotDirection.turnRight
+
     direction match {
       case `robotDirection` => Seq(NavigationCommand.Forward)
       case `robotDirectionLeft` => Seq(NavigationCommand.TurnLeft)
@@ -615,12 +422,12 @@ package object navigation {
   }
 
   case class NavigationInput(lab: Labyrinth, robotPosition: RobotPosition, goal: Point, feedback: Double = 0.0) {
-    def observation: VisionObservation = VisionObservation(lab, robotPosition).orientated
+    def observation: VisionObservation  = VisionObservation(lab, robotPosition).orientated
   }
 
-  case class NavigationState(visionMap: Labyrinth, labyrinth: Labyrinth,
-                            robotPosition: RobotPosition,
-                            goal: Point, path: Path, history: List[NavigationCommand]) {
+  final case class NavigationState(visionMap: Labyrinth, labyrinth: Labyrinth,
+                                   robotPosition: RobotPosition,
+                                   goal: Point, path: Path, history: List[NavigationCommand]) {
 
     def toCharMap: DenseMatrix[Char] = {
       val result = labToCharMatrix(visionMap)
@@ -647,7 +454,7 @@ package object navigation {
 
       vis(robotPosition.point.x, robotPosition.point.y) = Direction.char(robotPosition.direction)
 
-      charMatrixToString(vis)
+      matrixToString(vis)
     }
   }
 

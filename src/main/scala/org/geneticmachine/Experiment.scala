@@ -11,7 +11,19 @@ import scala.util.Try
  */
 case class FinalState[+S](finalState: S,
                           metrics: Map[String, Double],
-                          continuousMetrics: Map[String, Seq[Double]]) extends Serializable
+                          continuousMetrics: Map[String, Seq[Double]]) extends Serializable {
+  override def toString: String = {
+    val metricsRepr = for {
+      (k, v) <- metrics
+    } yield s"$k: $v"
+
+    val cMetricsRepr = for {
+      (k, vs) <- continuousMetrics
+    } yield s"$k: [${vs.mkString(", ")}]"
+
+    s"$finalState {${(metricsRepr ++ cMetricsRepr).mkString(", ")}}"
+  }
+}
 
 /**
  * Represents result of one step of an experiment.
@@ -20,9 +32,16 @@ case class FinalState[+S](finalState: S,
 case class PairResult[+S]
     (finalState: Try[FinalState[S]], algorithmId: Try[Long])
   extends Serializable {
+
   def isSuccess: Boolean = finalState.isSuccess && algorithmId.isSuccess
 
   def isFailure = !isSuccess
+
+  override def toString: String = {
+    val fsRepr = finalState.map { fs => fs.toString }.getOrElse("NONE")
+    val algoIdRepr = algorithmId.map { id => id.toString }.getOrElse("NONE")
+    s"(finalState: $fsRepr; DB id: $algoIdRepr)"
+  }
 }
 
 object ExperimentResult {
@@ -32,6 +51,10 @@ object ExperimentResult {
 }
 
 case class ExperimentResult[+S](steps: List[PairResult[S]]) {
+
+  override def toString: String = {
+    steps.mkString("Experiment result {\n  ", "\n  ", "\n}")
+  }
 
   def head: PairResult[S] = steps.head
 
@@ -173,7 +196,7 @@ sealed abstract class Experiment[I, O, S, -C <: ExecutionContext]
 
   def scheme(ind: Int): String = scheme.split("\n").map { s => "  " + s}.mkString("\n")
 
-  final def then[C1 <: C](other: Experiment[I, O, S, C1]): Experiment[I, O, S, C1] = {
+  final def andThen[C1 <: C](other: Experiment[I, O, S, C1]): Experiment[I, O, S, C1] = {
     new UniteExperiment(this, other)
   }
 }

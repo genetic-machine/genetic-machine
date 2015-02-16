@@ -5,6 +5,8 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 abstract class AlgorithmGen[-InputT, +OutputT, -Context <: ExecutionContext] {
+  override def toString: String = this.getClass.getSimpleName
+
   def apply(c: Context): Algorithm[InputT, OutputT]
 
   def errorGraph(e: Throwable): Graph = Graph.errorGraph(Graph.algorithmLabel, e)
@@ -12,6 +14,8 @@ abstract class AlgorithmGen[-InputT, +OutputT, -Context <: ExecutionContext] {
 
 abstract class Algorithm[-InputT, +OutputT] {
   type StateT
+
+  override def toString: String = this.getClass.getSimpleName
 
   val metrics: Seq[Metric[StateT]] = Seq.empty
   val continuousMetrics: Seq[ContinuousMetric[StateT]] = Seq.empty

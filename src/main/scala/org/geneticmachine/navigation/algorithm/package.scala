@@ -1,7 +1,5 @@
 package org.geneticmachine.navigation
 
-import org.geneticmachine.genetic.Mutator
-
 package object algorithm {
   trait LabyrinthSense extends (NavigationInput => Seq[Double]) {
     val senseNames: Seq[String]

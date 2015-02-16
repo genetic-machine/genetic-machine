@@ -5,6 +5,9 @@ import org.geneticmachine.common.graph.Graph
 import scala.concurrent.Future
 
 object IntEnvironmentGen extends EnvironmentGen[Int, Int, List[Int], ExecutionContext] {
+
+  override def toString: String = "IntEnvironment"
+
   def apply(c: ExecutionContext): IntEnvironment = {
     new IntEnvironment(10)(c)
   }
@@ -13,6 +16,8 @@ object IntEnvironmentGen extends EnvironmentGen[Int, Int, List[Int], ExecutionCo
 final class IntEnvironment(val max: Int)
                           (val context: ExecutionContext)
   extends Environment[Int, Int, List[Int]] {
+
+  override def toString: String = "IntEnvironment"
 
   def input(): Int = {
     scala.util.Random.nextInt(100)
@@ -25,7 +30,7 @@ final class IntEnvironment(val max: Int)
   }
 
   def process(state: List[Int], algorithmAction: Int): Future[(List[Int], Option[Int])] = Future.successful {
-    if (algorithmAction == state.head && state.size < max) {
+    if (state.size < max) {
       val i = input()
 
       (i :: state, Some(i))

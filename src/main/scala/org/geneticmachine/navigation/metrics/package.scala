@@ -35,8 +35,8 @@ package object metrics {
     def apply(state: NavigationState): Double = {
       val command = state.history.size.toDouble
 
-      val cost = reverseCostDict(state.labyrinth, state.goal)
-      val optimal = cost(state.path(0)).toDouble
+      val cost = reversedCostDict(state.labyrinth, state.goal)
+      val optimal = costF(cost)(state.path(0))
 
       command / optimal
     }

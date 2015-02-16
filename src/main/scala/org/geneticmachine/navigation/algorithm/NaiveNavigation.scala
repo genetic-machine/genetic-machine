@@ -31,7 +31,7 @@ class NaiveNavigation(val context: ExecutionContext)
   import context.futureExecutionContext
 
   override def act(stepCounter: Int, data: NavigationInput): Future[(Int, NavigationCommand)] = Future {
-    val command = DijkstraSense.optimal2(data)
+    val command = DijkstraSense.optimal(data)
     val newState = stepCounter + 1
     (newState, command)
   }

@@ -2,6 +2,7 @@ package org.geneticmachine
 
 import org.geneticmachine.machine.{SimpleMachine, SimpleExecutionContext, DBDriver}
 import org.geneticmachine.machine.db.Neo4JDriver
+import org.geneticmachine.navigation.utils.NavigationInfo
 import org.scalatest.{Matchers, FlatSpec}
 
 import scala.util.{Success, Try}
@@ -15,7 +16,7 @@ class ExperimentTest extends FlatSpec with Matchers {
     import Experiment._
 
     val experiment = {
-      (IncAlgorithmGen -> IntEnvironmentGen).then {
+      (IncAlgorithmGen -> IntEnvironmentGen).andThen {
         until { er: ExperimentResult[List[Int]] =>
           er.steps.size > 10
         }(IncAlgorithmGen -> IntEnvironmentGen)
@@ -28,9 +29,7 @@ class ExperimentTest extends FlatSpec with Matchers {
     val machine = new SimpleMachine
 
     println {
-      machine {
-        experiment
-      }
+      machine(experiment)
     }
 
     db.shutdown()
