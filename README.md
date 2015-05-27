@@ -65,10 +65,8 @@ remote("GeneticMachine@127.0.0.1:7779") {
 
 - [ ] Brains:
   - [x] Sample Dijkstra brain;
-  - [ ] Decision fusion (one-layer network);
-  - [ ] Idiotypic network (multi-layer network);
-  - [ ] Idiotypic network mod. 2;
-  - [ ] Adaptive dataflow;
+  - [x] Decision fusion (one-layer network);
+  - [x] Idiotypic network (multi-layer network).
   - [ ] Multi-brain shell.
 
 - [x] Robots:
@@ -87,19 +85,19 @@ remote("GeneticMachine@127.0.0.1:7779") {
 
 - [ ] General 'theoretical' features:
   - [x] feedback loop (for reinforcement learning);
-  - [ ] unacceptable behaviour detection.
+  - [x] unacceptable behaviour detection.
 
 ### Labyrinth specific
-- [ ] labyrinth visualization;
+- [x] labyrinth visualization;
 
 - [ ] Labyrinth feedback:
-  - [ ] a primitive feedback;
-  - [ ] oracle-based (aka Laplace's demon);
-  - [ ] based on brain's knowledge.
+  - [x] a primitive feedback;
+  - [x] oracle-based (aka Laplace's demon);
+  - [x] based on brain's knowledge.
 
 - [ ] Labyrinth generators:
   - [x] Random walk generator;
-  - [ ] Office generator;
+  - [x] Office generator;
   - [ ] Maze-like generator.
 
 - [ ] Vision:
@@ -108,4 +106,4 @@ remote("GeneticMachine@127.0.0.1:7779") {
   - [x] BFS based (something in the middle of full and true visions);
   - [ ] ray/shadow cast (i.e. true vision).
 
-- [ ] Efficiency metrics.
+- [x] Efficiency metrics.
